@@ -248,6 +248,83 @@ func TestUpdateSession(t *testing.T) {
 	}
 }
 
+func TestUpdateSession_MarksTitleManuallySet(t *testing.T) {
+	service := setupTestService(t)
+	ctx := setupTestContextWithCaller(t)
+
+	createReq := &contract.CreateSessionRequest{
+		Type:  string(types.SessionTypeUserChat),
+		Title: "Original Title",
+	}
+
+	session, err := service.CreateSession(ctx, createReq)
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	updateReq := &contract.UpdateSessionRequest{
+		Title: "Updated Title",
+	}
+
+	_, err = service.UpdateSession(ctx, session.ID, updateReq)
+	if err != nil {
+		t.Fatalf("UpdateSession failed: %v", err)
+	}
+
+	retrieved, err := service.GetSession(ctx, session.ID, "")
+	if err != nil {
+		t.Fatalf("GetSession failed: %v", err)
+	}
+
+	if !retrieved.TitleManuallySet {
+		t.Error("expected TitleManuallySet to be true after manual update")
+	}
+}
+
+func TestAddMessage_NotAutoUpdateAfterManualRename(t *testing.T) {
+	service := setupTestService(t)
+	ctx := setupTestContextWithCaller(t)
+
+	createReq := &contract.CreateSessionRequest{
+		Type: string(types.SessionTypeUserChat),
+	}
+
+	session, err := service.CreateSession(ctx, createReq)
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	updateReq := &contract.UpdateSessionRequest{
+		Title: "用户手动设置的标题",
+	}
+	_, err = service.UpdateSession(ctx, session.ID, updateReq)
+	if err != nil {
+		t.Fatalf("UpdateSession failed: %v", err)
+	}
+
+	addReq := &contract.AddMessageRequest{
+		Role:    string(types.MessageRoleUser),
+		Content: "这是一条消息",
+	}
+	_, err = service.AddMessage(ctx, session.ID, addReq)
+	if err != nil {
+		t.Fatalf("AddMessage failed: %v", err)
+	}
+
+	retrieved, err := service.GetSession(ctx, session.ID, "")
+	if err != nil {
+		t.Fatalf("GetSession failed: %v", err)
+	}
+
+	if retrieved.Title != "用户手动设置的标题" {
+		t.Errorf("expected title to remain '用户手动设置的标题', got '%s'", retrieved.Title)
+	}
+
+	if !retrieved.TitleManuallySet {
+		t.Error("expected TitleManuallySet to be true")
+	}
+}
+
 func TestDeleteSession(t *testing.T) {
 	service := setupTestService(t)
 	ctx := setupTestContextWithCaller(t)

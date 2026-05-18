@@ -118,6 +118,7 @@ func (s *sessionService) UpdateSession(ctx context.Context, id uint, req *contra
 	}
 
 	if req.Title != "" {
+		session.TitleManuallySet = true
 		if err := s.renameSession(ctx, session, req.Title); err != nil {
 			return nil, err
 		}
@@ -341,6 +342,9 @@ func (s *sessionService) buildMessage(req *contract.AddMessageRequest, sequence 
 
 func (s *sessionService) tryAutoUpdateTitle(ctx context.Context, session *types.Session, req *contract.AddMessageRequest) {
 	if session.MessageCount > 0 || req.Role != string(types.MessageRoleUser) {
+		return
+	}
+	if session.TitleManuallySet {
 		return
 	}
 	if session.Title != "" && session.Title != "新会话" {
@@ -574,6 +578,7 @@ func convertToContractSession(session *types.Session) *contract.Session {
 		AllocatedAssistantID: session.AllocatedAssistantID,
 		Status:               session.Status,
 		Title:                session.Title,
+		TitleManuallySet:     session.TitleManuallySet,
 		MessageCount:         session.MessageCount,
 		CreatedAt:            session.CreatedAt,
 		UpdatedAt:            session.UpdatedAt,

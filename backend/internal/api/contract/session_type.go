@@ -57,6 +57,7 @@ type Session struct {
 	AssistantCode        string                 `json:"assistant_code"`
 	Status               string                 `json:"status"`
 	Title                string                 `json:"title"`
+	TitleManuallySet     bool                   `json:"title_manually_set,omitempty"`
 	Metadata             *types.SessionMetadata `json:"metadata,omitempty"`
 	MessageCount         int                    `json:"message_count"`
 	LastMessageAt        *time.Time             `json:"last_message_at,omitempty"`
