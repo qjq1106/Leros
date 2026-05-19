@@ -309,7 +309,7 @@ func (s *sessionService) buildMessage(req *contract.AddMessageRequest, sequence 
 		Role:        req.Role,
 		Content:     req.Content,
 		MessageType: req.MessageType,
-		Status:      req.Status,
+		Status:      string(types.MessageStatusPending),
 		Sequence:    sequence,
 		Timestamp:   time.Now().UnixMilli(),
 	}
@@ -331,13 +331,12 @@ func (s *sessionService) buildMessage(req *contract.AddMessageRequest, sequence 
 	} else {
 		message.Metadata = types.MessageMetadata{}
 	}
+	if req.Usage != nil {
+		message.Usage = *req.Usage
+	}
 
 	if message.MessageType == "" {
 		message.MessageType = string(types.MessageTypeText)
-	}
-
-	if message.Status == "" {
-		message.Status = string(types.MessageStatusComplete)
 	}
 
 	return message
@@ -467,7 +466,6 @@ func (s *sessionService) publishWorkerTask(ctx context.Context, session *types.S
 			},
 			Input: events.TaskInput{
 				Type: events.InputTypeMessage,
-				Text: message.Content,
 			},
 		},
 		Metadata: map[string]any{
@@ -662,6 +660,10 @@ func convertToContractSession(session *types.Session) *contract.Session {
 	return result
 }
 
+func hasMessageUsage(usage types.MessageUsage) bool {
+	return usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.TotalTokens != 0
+}
+
 func convertToContractSessionMessage(message *types.SessionMessage) *contract.SessionMessage {
 	result := &contract.SessionMessage{
 		ID:          fmt.Sprintf("%d", message.ID),
@@ -669,7 +671,6 @@ func convertToContractSessionMessage(message *types.SessionMessage) *contract.Se
 		Role:        message.Role,
 		Content:     message.Content,
 		MessageType: message.MessageType,
-		Status:      message.Status,
 		Timestamp:   message.Timestamp,
 		Sequence:    message.Sequence,
 		CreatedAt:   message.CreatedAt,
@@ -689,6 +690,9 @@ func convertToContractSessionMessage(message *types.SessionMessage) *contract.Se
 
 	if message.Metadata.ImageURL != "" || message.Metadata.Language != "" || message.Metadata.FileURL != "" || message.Metadata.FileName != "" || message.Metadata.Model != "" || message.Metadata.Extra != nil {
 		result.Metadata = &message.Metadata
+	}
+	if hasMessageUsage(message.Usage) {
+		result.Usage = &message.Usage
 	}
 
 	return result
@@ -717,9 +721,13 @@ func (s *sessionService) CompleteSessionMessage(ctx context.Context, req *contra
 		Role:        string(types.MessageRoleAssistant),
 		Content:     req.Content,
 		MessageType: string(types.MessageTypeText),
-		Status:      string(types.MessageStatusComplete),
+		Status:      string(types.MessageStatusCompleted),
 		Sequence:    sequence,
 		Timestamp:   req.CreatedAt.UnixMilli(),
+	}
+
+	if req.Chunks != nil && len(req.Chunks) > 0 {
+		msgEntity.Chunks = req.Chunks
 	}
 
 	if req.ToolCalls != nil && len(req.ToolCalls) > 0 {
@@ -731,6 +739,9 @@ func (s *sessionService) CompleteSessionMessage(ctx context.Context, req *contra
 
 	if req.Metadata != nil {
 		msgEntity.Metadata = *req.Metadata
+	}
+	if req.Usage != nil {
+		msgEntity.Usage = *req.Usage
 	}
 
 	if err := db.CreateMessage(ctx, s.db, msgEntity); err != nil {
@@ -764,15 +775,28 @@ func (s *sessionService) FailedSessionMessage(ctx context.Context, req *contract
 		return fmt.Errorf("get sequence for %s: %w", req.SessionID, err)
 	}
 
+	status := req.Status
+	if status == "" {
+		status = string(types.MessageStatusFailed)
+	}
+
 	msgEntity := &types.SessionMessage{
 		SessionID:   req.SessionID,
-		Role:        string(types.MessageRoleSystem),
+		Role:        string(types.MessageRoleAssistant),
 		Content:     req.ErrorMsg,
 		MessageType: string(types.MessageTypeText),
-		Status:      string(types.MessageStatusError),
+		Status:      status,
 		Sequence:    sequence,
 		Timestamp:   req.CreatedAt.UnixMilli(),
-		Metadata:    types.MessageMetadata{Extra: map[string]interface{}{"error_code": req.ErrorCode}},
+	}
+	if req.Metadata != nil {
+		msgEntity.Metadata = *req.Metadata
+	}
+	if req.ErrorCode != "" {
+		if msgEntity.Metadata.Extra == nil {
+			msgEntity.Metadata.Extra = map[string]interface{}{}
+		}
+		msgEntity.Metadata.Extra["error_code"] = req.ErrorCode
 	}
 
 	if err := db.CreateMessage(ctx, s.db, msgEntity); err != nil {

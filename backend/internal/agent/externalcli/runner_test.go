@@ -15,8 +15,7 @@ func TestRunnerAdaptsEngineResult(t *testing.T) {
 	engine := &fakeEngine{
 		events: []events.Event{
 			{Type: events.EventStarted},
-			{Type: events.EventResult, Content: "done"},
-			*events.NewUsage(&events.UsagePayload{
+			*events.NewMessageResult("done", &events.UsagePayload{
 				InputTokens:  12,
 				OutputTokens: 5,
 				TotalTokens:  17,
@@ -204,6 +203,10 @@ type fakeEngine struct {
 
 func (e *fakeEngine) Prepare(_ context.Context, _ engines.PrepareRequest) error {
 	return nil
+}
+
+func (e *fakeEngine) GetSkillDir() string {
+	return ""
 }
 
 func (e *fakeEngine) RegisterMCP(_ context.Context, _ engines.MCPServerConfig) error {
