@@ -40,7 +40,7 @@ func handleSessionTitleRequest(ctx context.Context, service contract.SessionServ
 		return
 	}
 	ctx = auth.WithContext(ctx, auth.SystemIdentity(), nil)
-	if err := service.HandleSessionTitleRequest(ctx, message.ID); err != nil {
+	if err := service.HandleSessionTitleRequest(ctx, message.SessionID); err != nil {
 		logs.WarnContextf(ctx, "handle session title request: %v", err)
 	}
 }

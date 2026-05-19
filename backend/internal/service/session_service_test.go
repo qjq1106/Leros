@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"testing"
 
 	"github.com/nats-io/nats.go"
@@ -94,20 +93,15 @@ func setupTestContextWithCaller(t *testing.T) context.Context {
 	return auth.WithContext(context.Background(), caller, trace)
 }
 
-func addMessageAndGetID(t *testing.T, service contract.SessionService, ctx context.Context, sessionID uint, content string) uint {
+func addMessage(t *testing.T, service contract.SessionService, ctx context.Context, sessionID uint, content string) {
 	t.Helper()
-	msg, err := service.AddMessage(ctx, sessionID, &contract.AddMessageRequest{
+	_, err := service.AddMessage(ctx, sessionID, &contract.AddMessageRequest{
 		Role:    string(types.MessageRoleUser),
 		Content: content,
 	})
 	if err != nil {
 		t.Fatalf("AddMessage failed: %v", err)
 	}
-	msgID, err := strconv.ParseUint(msg.ID, 10, 64)
-	if err != nil {
-		t.Fatalf("ParseUint failed: %v", err)
-	}
-	return uint(msgID)
 }
 
 func TestCreateSession_ValidInput(t *testing.T) {
@@ -312,8 +306,8 @@ func TestHandleSessionTitleRequest_AfterManualRename(t *testing.T) {
 		t.Fatalf("UpdateSession failed: %v", err)
 	}
 
-	msgID := addMessageAndGetID(t, service, ctx, session.ID, "这是一条消息")
-	err = service.HandleSessionTitleRequest(ctx, msgID)
+	addMessage(t, service, ctx, session.ID, "这是一条消息")
+	err = service.HandleSessionTitleRequest(ctx, session.SessionID)
 	if err != nil {
 		t.Fatalf("HandleSessionTitleRequest failed: %v", err)
 	}
@@ -558,8 +552,8 @@ func TestHandleSessionTitleRequest_EmptyTitle(t *testing.T) {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
-	msgID := addMessageAndGetID(t, service, ctx, session.ID, "这是我的第一条消息")
-	err = service.HandleSessionTitleRequest(ctx, msgID)
+	addMessage(t, service, ctx, session.ID, "这是我的第一条消息")
+	err = service.HandleSessionTitleRequest(ctx, session.SessionID)
 	if err != nil {
 		t.Fatalf("HandleSessionTitleRequest failed: %v", err)
 	}
@@ -585,8 +579,8 @@ func TestHandleSessionTitleRequest_XinSessionTitle(t *testing.T) {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
-	msgID := addMessageAndGetID(t, service, ctx, session.ID, "我的第一条消息")
-	err = service.HandleSessionTitleRequest(ctx, msgID)
+	addMessage(t, service, ctx, session.ID, "我的第一条消息")
+	err = service.HandleSessionTitleRequest(ctx, session.SessionID)
 	if err != nil {
 		t.Fatalf("HandleSessionTitleRequest failed: %v", err)
 	}
@@ -614,8 +608,8 @@ func TestHandleSessionTitleRequest_Truncated(t *testing.T) {
 		longContent += "a"
 	}
 
-	msgID := addMessageAndGetID(t, service, ctx, session.ID, longContent)
-	err = service.HandleSessionTitleRequest(ctx, msgID)
+	addMessage(t, service, ctx, session.ID, longContent)
+	err = service.HandleSessionTitleRequest(ctx, session.SessionID)
 	if err != nil {
 		t.Fatalf("HandleSessionTitleRequest failed: %v", err)
 	}
@@ -641,8 +635,8 @@ func TestHandleSessionTitleRequest_CustomTitleUnchanged(t *testing.T) {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
-	msgID := addMessageAndGetID(t, service, ctx, session.ID, "一条消息")
-	err = service.HandleSessionTitleRequest(ctx, msgID)
+	addMessage(t, service, ctx, session.ID, "一条消息")
+	err = service.HandleSessionTitleRequest(ctx, session.SessionID)
 	if err != nil {
 		t.Fatalf("HandleSessionTitleRequest failed: %v", err)
 	}
@@ -670,8 +664,8 @@ func TestHandleSessionTitleRequest_ManuallySetFlag(t *testing.T) {
 		t.Fatalf("UpdateSession failed: %v", err)
 	}
 
-	msgID := addMessageAndGetID(t, service, ctx, session.ID, "新消息内容")
-	err = service.HandleSessionTitleRequest(ctx, msgID)
+	addMessage(t, service, ctx, session.ID, "新消息内容")
+	err = service.HandleSessionTitleRequest(ctx, session.SessionID)
 	if err != nil {
 		t.Fatalf("HandleSessionTitleRequest failed: %v", err)
 	}

@@ -36,5 +36,5 @@ type SessionService interface {
 	FailedSessionMessage(ctx context.Context, req *FailedSessionMessageRequest) error
 
 	// HandleSessionTitleRequest 异步处理会话标题更新请求
-	HandleSessionTitleRequest(ctx context.Context, messageID uint) error
+	HandleSessionTitleRequest(ctx context.Context, sessionID string) error
 }

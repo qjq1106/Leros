@@ -349,24 +349,23 @@ func (s *sessionService) buildMessage(req *contract.AddMessageRequest, sequence 
 	return message
 }
 
-func (s *sessionService) tryAutoUpdateTitle(ctx context.Context, session *types.Session, content string) {
+func (s *sessionService) tryAutoUpdateTitle(ctx context.Context, session *types.Session) {
 	if session.TitleManuallySet {
 		return
 	}
-	if session.MessageCount > 3 {
+	if session.MessageCount >= 3 {
 		return
 	}
 
-	if err := s.renameSession(ctx, session, content); err != nil {
+	if err := s.renameSession(ctx, session); err != nil {
 		logs.WarnContextf(ctx, "failed to auto-update session title: %v", err)
 	}
 }
 
-func (s *sessionService) renameSession(ctx context.Context, session *types.Session, content string) error {
+func (s *sessionService) renameSession(ctx context.Context, session *types.Session) error {
 	recentMessages := s.buildRecentMessages(ctx, session.SessionID)
 
 	title, err := prompts.Run(ctx, prompts.KeySessionTitle, map[string]any{
-		"content":         content,
 		"current_title":   session.Title,
 		"recent_messages": recentMessages,
 	})
@@ -376,11 +375,17 @@ func (s *sessionService) renameSession(ctx context.Context, session *types.Sessi
 		if session.Title != "" && session.Title != "新会话" {
 			return nil
 		}
-		runes := []rune(content)
-		if len(runes) > 100 {
-			title = string(runes[:100])
-		} else {
-			title = content
+		latestMsg, _ := db.GetLatestMessage(ctx, s.db, session.SessionID)
+		if latestMsg != nil {
+			runes := []rune(latestMsg.Content)
+			if len(runes) > 100 {
+				title = string(runes[:100])
+			} else {
+				title = latestMsg.Content
+			}
+		}
+		if title == "" {
+			return nil
 		}
 	} else if title == "KEEP" {
 		return nil
@@ -404,25 +409,17 @@ func (s *sessionService) buildRecentMessages(ctx context.Context, sessionID stri
 	return sb.String()
 }
 
-func (s *sessionService) HandleSessionTitleRequest(ctx context.Context, messageID uint) error {
-	message, err := db.GetMessageByID(ctx, s.db, messageID)
+func (s *sessionService) HandleSessionTitleRequest(ctx context.Context, sessionID string) error {
+	session, err := db.GetSessionBySessionID(ctx, s.db, sessionID)
 	if err != nil {
-		return fmt.Errorf("get message %d: %w", messageID, err)
-	}
-	if message == nil {
-		return nil
-	}
-
-	session, err := db.GetSessionBySessionID(ctx, s.db, message.SessionID)
-	if err != nil {
-		return fmt.Errorf("get session %s: %w", message.SessionID, err)
+		return fmt.Errorf("get session %s: %w", sessionID, err)
 	}
 	if session == nil {
 		return nil
 	}
 
-	logs.DebugContextf(ctx, "handling session title request for session %s: content=%s", session.SessionID, message.Content)
-	s.tryAutoUpdateTitle(ctx, session, message.Content)
+	logs.DebugContextf(ctx, "handling session title request for session %s", sessionID)
+	s.tryAutoUpdateTitle(ctx, session)
 	return nil
 }
 
