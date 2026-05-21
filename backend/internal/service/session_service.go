@@ -65,7 +65,7 @@ func (s *sessionService) CreateSession(ctx context.Context, req *contract.Create
 
 	session := &types.Session{
 		PublicID:             sessionID,
-		Type:                 req.Type,
+		Type:                 types.SessionType(req.Type),
 		Uin:                  caller.Uin,
 		OrgID:                caller.OrgID,
 		AssistantID:          req.AssistantID,
@@ -154,10 +154,11 @@ func (s *sessionService) ListSessions(ctx context.Context, req *contract.ListSes
 		orgID = &caller.OrgID
 	}
 
+	sessionType := (*types.SessionType)(req.Type)
 	sessions, total, err := db.ListSessions(
 		ctx,
 		s.db,
-		req.Type,
+		sessionType,
 		req.Status,
 		uin,
 		orgID,
@@ -320,7 +321,7 @@ func (s *sessionService) buildMessage(req *contract.AddMessageRequest, sequence 
 	if req.Metadata != nil {
 		message.Metadata = *req.Metadata
 	} else {
-		message.Metadata = types.MessageMetadata{}
+		message.Metadata = types.ObjectMetadata{}
 	}
 	if req.Usage != nil {
 		message.Usage = *req.Usage
@@ -415,7 +416,7 @@ func (s *sessionService) publishWorkerTask(ctx context.Context, session *types.S
 	}
 
 	if session.AssistantID == 0 && session.AllocatedAssistantID == 0 && s.inferrer != nil {
-		assignedAssistantID := s.inferrer.InferAssignedAssistantID(ctx, orgID, session.Type)
+		assignedAssistantID := s.inferrer.InferAssignedAssistantID(ctx, orgID, string(session.Type))
 		if assignedAssistantID > 0 {
 			session.AllocatedAssistantID = assignedAssistantID
 			if err := db.UpdateAllocatedAssistantID(ctx, s.db, session.ID, assignedAssistantID); err != nil {
@@ -584,7 +585,7 @@ func convertToContractSession(session *types.Session) *contract.Session {
 	result := &contract.Session{
 		ID:                   session.ID,
 		SessionID:            session.PublicID,
-		Type:                 session.Type,
+		Type:                 string(session.Type),
 		Uin:                  session.Uin,
 		OrgID:                session.OrgID,
 		AssistantID:          session.AssistantID,
@@ -597,7 +598,7 @@ func convertToContractSession(session *types.Session) *contract.Session {
 		UpdatedAt:            session.UpdatedAt,
 	}
 
-	if session.Metadata.Tags != nil || session.Metadata.Extra != nil || session.Metadata.UserAgent != "" || session.Metadata.IPAddress != "" {
+	if session.Metadata.Tags != nil || session.Metadata.Extra != nil {
 		result.Metadata = &session.Metadata
 	}
 	if session.LastMessageAt != nil {
@@ -638,7 +639,7 @@ func convertToContractSessionMessage(message *types.SessionMessage, publicID str
 		}
 	}
 
-	if message.Metadata.Model != "" || message.Metadata.Latency != 0 || message.Metadata.Extra != nil {
+	if message.Metadata.Extra != nil {
 		result.Metadata = &message.Metadata
 	}
 
