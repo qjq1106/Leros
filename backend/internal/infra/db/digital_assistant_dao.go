@@ -3,19 +3,14 @@ package db
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 
+	"github.com/ygpkg/yg-go/logs"
+
 	"github.com/insmtx/Leros/backend/types"
 )
-
-// DigitalAssistantQuery 数字助手列表查询参数
-type DigitalAssistantQuery struct {
-	PageQuery
-	OwnerID *uint
-	Status  *string
-	Keyword *string
-}
 
 // CreateDigitalAssistant 创建数字助手
 func CreateDigitalAssistant(ctx context.Context, db *gorm.DB, da *types.DigitalAssistant) error {
@@ -73,7 +68,7 @@ func DigitalAssistantCodeExists(ctx context.Context, db *gorm.DB, code string, e
 }
 
 // ListDigitalAssistant 查询数字助手列表
-func ListDigitalAssistant(ctx context.Context, db *gorm.DB, opt *DigitalAssistantQuery) ([]*types.DigitalAssistant, int64, error) {
+func ListDigitalAssistant(ctx context.Context, db *gorm.DB, opt *PageQuery) ([]*types.DigitalAssistant, int64, error) {
 	var entities []*types.DigitalAssistant
 	var total int64
 
@@ -82,26 +77,43 @@ func ListDigitalAssistant(ctx context.Context, db *gorm.DB, opt *DigitalAssistan
 	if opt.OrgID > 0 {
 		query = query.Where("org_id = ?", opt.OrgID)
 	}
-	if opt.OwnerID != nil {
-		query = query.Where("owner_id = ?", *opt.OwnerID)
-	}
-	if opt.Status != nil {
-		query = query.Where("status = ?", *opt.Status)
-	}
-	if opt.Keyword != nil && *opt.Keyword != "" {
-		query = query.Where("name LIKE ? OR code LIKE ? OR description LIKE ?", "%"+*opt.Keyword+"%", "%"+*opt.Keyword+"%", "%"+*opt.Keyword+"%")
+
+	for _, filter := range opt.Filters {
+		switch filter.Field {
+		case "owner_id":
+			if len(filter.Value) > 0 {
+				query = query.Where("owner_id = ?", filter.Value[0])
+			}
+		case "status":
+			if len(filter.Value) > 0 {
+				query = query.Where("status = ?", filter.Value[0])
+			}
+		case "keyword":
+			if len(filter.Value) > 0 {
+				kw := filter.Value[0]
+				query = query.Where("name LIKE ? OR code LIKE ? OR description LIKE ?", "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
+			}
+		default:
+			logs.WarnContextf(ctx, "[digital_assistant][ListDigitalAssistant] invalid filter field: %s", filter.Field)
+		}
 	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	query = query.Order("created_at DESC").Offset(opt.Offset)
+	if len(opt.OrderBy) > 0 {
+		query = query.Order(strings.Join(opt.OrderBy, ","))
+	} else {
+		query = query.Order("created_at DESC")
+	}
+
 	if !opt.ListAll && opt.Limit > 0 {
 		query = query.Limit(opt.Limit)
 	} else {
 		query = query.Limit(150)
 	}
+	query = query.Offset(opt.Offset)
 
 	if err := query.Find(&entities).Error; err != nil {
 		return nil, 0, err

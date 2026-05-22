@@ -4,11 +4,12 @@ package db
 type PageQuery struct {
 	Filters []Filter
 	OrderBy []string
-	OrgID   uint
-	Uin     uint
 	Offset  int
 	Limit   int
 	ListAll bool
+
+	OrgID uint
+	Uin   uint
 }
 
 // Filter 过滤条件

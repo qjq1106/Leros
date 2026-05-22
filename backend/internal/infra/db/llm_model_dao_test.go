@@ -138,7 +138,7 @@ func TestListLLMModels(t *testing.T) {
 
 	orgID := uint(1)
 	provider := string(types.LLMProviderDeepSeek)
-	items, total, err := ListLLMModels(ctx, database, &LLMModelQuery{PageQuery: PageQuery{OrgID: orgID, Limit: 20}, Provider: &provider})
+	items, total, err := ListLLMModels(ctx, database, &PageQuery{OrgID: orgID, Limit: 20, Filters: []Filter{{Field: "provider", Value: []string{provider}}}})
 	if err != nil {
 		t.Fatalf("ListLLMModels failed: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestListLLMModels(t *testing.T) {
 	}
 
 	keyword := "openai"
-	items, total, err = ListLLMModels(ctx, database, &LLMModelQuery{PageQuery: PageQuery{OrgID: orgID, Limit: 20}, Keyword: &keyword})
+	items, total, err = ListLLMModels(ctx, database, &PageQuery{OrgID: orgID, Limit: 20, Filters: []Filter{{Field: "keyword", Value: []string{keyword}}}})
 	if err != nil {
 		t.Fatalf("ListLLMModels failed: %v", err)
 	}
