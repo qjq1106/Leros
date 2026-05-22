@@ -15,6 +15,7 @@ type SessionType string
 const (
 	SessionTypeUserChat SessionType = "chat"
 	SessionTypeTask     SessionType = "task"
+	SessionTypeProject  SessionType = "project"
 )
 
 // SessionStatus 会话状态常量

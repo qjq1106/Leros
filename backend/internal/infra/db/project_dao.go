@@ -59,6 +59,26 @@ func DeleteProject(ctx context.Context, db *gorm.DB, id uint) error {
 	return db.WithContext(ctx).Delete(&types.Project{}, id).Error
 }
 
+// CreateProjectMember 创建项目成员
+func CreateProjectMember(ctx context.Context, db *gorm.DB, member *types.ProjectMember) error {
+	return db.WithContext(ctx).Create(member).Error
+}
+
+// GetProjectSession 根据项目ID获取scope=project的会话
+func GetProjectSession(ctx context.Context, db *gorm.DB, projectID uint) (*types.Session, error) {
+	var entity types.Session
+	err := db.WithContext(ctx).
+		Where("project_id = ? AND type = ?", projectID, string(types.SessionTypeProject)).
+		First(&entity).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &entity, nil
+}
+
 // ListProjectsResponse 项目列表查询结果
 type ListProjectsResponse struct {
 	Total  int64            `json:"total"`

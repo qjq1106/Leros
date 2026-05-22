@@ -32,6 +32,7 @@ func (h *SessionHandler) RegisterRoutes(r gin.IRouter) {
 	r.POST("/GetSessionMessages", h.GetSessionMessages)
 	r.POST("/DeleteMessage", h.DeleteMessage)
 	r.POST("/ClearSessionMessages", h.ClearSessionMessages)
+	r.POST("/NewMessage", h.NewMessage)
 }
 
 func RegisterSessionRoutes(r gin.IRouter, service contract.SessionService) {
@@ -392,6 +393,34 @@ func (h *SessionHandler) ClearSessionMessages(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.Success(nil))
 }
 
+// @Summary 首页新建消息
+// @Description 原子创建 Project + Task + Session 并分配 AgentWorker
+// @Tags Session
+// @Accept json
+// @Produce json
+// @Param body body contract.NewMessageRequest true "新建消息请求"
+// @Success 200 {object} dto.BaseResponse "成功响应"
+// @Failure 400 {object} dto.ErrorResponse "请求参数错误"
+// @Failure 401 {object} dto.ErrorResponse "未认证"
+// @Failure 404 {object} dto.ErrorResponse "资源不存在"
+// @Failure 500 {object} dto.ErrorResponse "内部服务器错误"
+// @Router /NewMessage [post]
+func (h *SessionHandler) NewMessage(ctx *gin.Context) {
+	var req contract.NewMessageRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, dto.Error(dto.CodeInvalidParams, err.Error()))
+		return
+	}
+
+	result, err := h.service.NewMessage(ctx, &req)
+	if err != nil {
+		handleSessionServiceError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, dto.Success(result))
+}
+
 func handleSessionServiceError(ctx *gin.Context, err error) {
 	if err.Error() == "user not authenticated or org not set" {
 		ctx.JSON(http.StatusUnauthorized, dto.Error(dto.CodeInternalError, err.Error()))
@@ -401,7 +430,7 @@ func handleSessionServiceError(ctx *gin.Context, err error) {
 		ctx.JSON(http.StatusForbidden, dto.Error(dto.CodeInternalError, err.Error()))
 		return
 	}
-	if err.Error() == "session not found" || err.Error() == "message not found" {
+	if err.Error() == "session not found" || err.Error() == "message not found" || err.Error() == "project not found" {
 		ctx.JSON(http.StatusNotFound, dto.Error(dto.CodeNotFound, err.Error()))
 		return
 	}

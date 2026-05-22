@@ -37,4 +37,7 @@ type SessionService interface {
 
 	// HandleSessionTitleRequest handles an asynchronous session title update request.
 	HandleSessionTitleRequest(ctx context.Context, sessionID string) error
+
+	// NewMessage 首页新建消息接口，原子创建 Project + Task + Session 并分配 AgentWorker
+	NewMessage(ctx context.Context, req *NewMessageRequest) (*NewMessageResponse, error)
 }
