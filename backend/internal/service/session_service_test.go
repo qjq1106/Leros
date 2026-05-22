@@ -752,7 +752,7 @@ func TestListSessions_FilterByType(t *testing.T) {
 	typeFilter := string(types.SessionTypeUserChat)
 	listReq := &contract.ListSessionsRequest{
 		Type: &typeFilter,
-		Pagination: contract.Pagination{
+		Pagination: types.Pagination{
 			Offset: 0,
 			Limit:  20,
 		},
@@ -797,7 +797,7 @@ func TestListSessions_FilterByStatus(t *testing.T) {
 	statusFilter := string(types.SessionStatusActive)
 	listReq := &contract.ListSessionsRequest{
 		Status: &statusFilter,
-		Pagination: contract.Pagination{
+		Pagination: types.Pagination{
 			Offset: 0,
 			Limit:  20,
 		},

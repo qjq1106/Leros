@@ -219,19 +219,19 @@ func (s *llmModelService) ListLLMModels(ctx context.Context, req *contract.ListL
 		return nil, err
 	}
 
-	opt := &db.PageQuery{
+	opt := &types.PageQuery{
 		OrgID:  caller.OrgID,
 		Offset: req.Offset,
 		Limit:  req.Limit,
 	}
 	if req.Provider != nil && *req.Provider != "" {
-		opt.Filters = append(opt.Filters, db.Filter{Field: "provider", Value: []string{*req.Provider}})
+		opt.Filters = append(opt.Filters, types.Filter{Field: "provider", Value: []string{*req.Provider}})
 	}
 	if req.Status != nil && *req.Status != "" {
-		opt.Filters = append(opt.Filters, db.Filter{Field: "status", Value: []string{*req.Status}})
+		opt.Filters = append(opt.Filters, types.Filter{Field: "status", Value: []string{*req.Status}})
 	}
 	if req.Keyword != nil && *req.Keyword != "" {
-		opt.Filters = append(opt.Filters, db.Filter{Field: "keyword", Value: []string{*req.Keyword}})
+		opt.Filters = append(opt.Filters, types.Filter{Field: "keyword", Value: []string{*req.Keyword}})
 	}
 
 	models, total, err := db.ListLLMModels(ctx, s.db, opt)

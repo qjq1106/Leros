@@ -156,28 +156,28 @@ func (s *sessionService) ListSessions(ctx context.Context, req *contract.ListSes
 	}
 
 	sessionType := (*types.SessionType)(req.Type)
-	opt := &db.PageQuery{
+	opt := &types.PageQuery{
 		OrgID:  *orgID,
 		Offset: req.Offset,
 		Limit:  req.Limit,
 	}
 	if sessionType != nil && *sessionType != "" {
-		opt.Filters = append(opt.Filters, db.Filter{Field: "type", Value: []string{string(*sessionType)}, ExactMatch: true})
+		opt.Filters = append(opt.Filters, types.Filter{Field: "type", Value: []string{string(*sessionType)}, ExactMatch: true})
 	}
 	if req.Status != nil && *req.Status != "" {
-		opt.Filters = append(opt.Filters, db.Filter{Field: "status", Value: []string{*req.Status}})
+		opt.Filters = append(opt.Filters, types.Filter{Field: "status", Value: []string{*req.Status}})
 	}
 	if uin != nil && *uin > 0 {
 		opt.Uin = *uin
 	}
 	if req.AssistantID != nil && *req.AssistantID > 0 {
-		opt.Filters = append(opt.Filters, db.Filter{Field: "assistant_id", Value: []string{fmt.Sprintf("%d", *req.AssistantID)}})
+		opt.Filters = append(opt.Filters, types.Filter{Field: "assistant_id", Value: []string{fmt.Sprintf("%d", *req.AssistantID)}})
 	}
 	if req.AssistantCode != nil && *req.AssistantCode != "" {
-		opt.Filters = append(opt.Filters, db.Filter{Field: "assistant_code", Value: []string{*req.AssistantCode}})
+		opt.Filters = append(opt.Filters, types.Filter{Field: "assistant_code", Value: []string{*req.AssistantCode}})
 	}
 	if req.Keyword != nil && *req.Keyword != "" {
-		opt.Filters = append(opt.Filters, db.Filter{Field: "keyword", Value: []string{*req.Keyword}})
+		opt.Filters = append(opt.Filters, types.Filter{Field: "keyword", Value: []string{*req.Keyword}})
 	}
 
 	sessions, total, err := db.ListSessions(ctx, s.db, opt)
