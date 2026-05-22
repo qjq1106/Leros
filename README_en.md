@@ -188,14 +188,6 @@ Leros is designed to operate the third category.
 
 ---
 
-## 📜 License
-
-(To be determined — Apache 2.0 / Commercial Hybrid / Enterprise License)
-
----
-
----
-
 ## 📚 Documentation
 
 Complete documentation is available in the `docs/` directory:
@@ -217,12 +209,4 @@ Complete documentation is available in the `docs/` directory:
 
 ## 🤝 Contributing
 
-We welcome:
-
-* Skill plugins
-* Model adapters
-* Workflow templates
-* Observability integrations
-* Security enhancements
-
-Enterprise partners are welcome to collaborate.
+We welcome skill plugins, model adapters, workflow templates, observability integrations, and security enhancements. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
