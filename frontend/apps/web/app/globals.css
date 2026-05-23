@@ -51,6 +51,7 @@
 	--leros-radius-md: 12px;
 	--leros-radius-lg: 16px;
 	--leros-sidebar-width: 240px;
+	--leros-shadow-sm: 0 1px 2px rgba(30, 41, 59, 0.05);
 	--leros-shadow-menu: 0 18px 45px rgba(30, 41, 59, 0.16);
 }
 
@@ -78,31 +79,31 @@
 		flex-shrink: 0;
 		flex-direction: column;
 		overflow: hidden;
-		border-right: 1px solid rgba(194, 198, 216, 0.6); /* border-outline-variant */
-		background: #f4f7fd; /* f4f7fd design bg */
+		border-right: 1px solid var(--leros-sidebar-border);
+		background: var(--leros-sidebar-bg);
 		color: var(--leros-text);
-		padding: 24px 0; /* py-6 */
+		padding: 24px 0;
 	}
 
 	.leros-brand {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0 24px; /* px-6 */
-		margin-bottom: 40px; /* mb-10 */
+		padding: 0 24px;
+		margin-bottom: 40px;
 	}
 
 	.leros-logo-placeholder {
 		display: flex;
-		width: 40px; /* w-10 */
-		height: 40px; /* h-10 */
+		width: 40px;
+		height: 40px;
 		flex-shrink: 0;
 		align-items: center;
 		justify-content: center;
-		border-radius: 12px; /* rounded-xl */
-		background: #0050cb; /* primary */
+		border-radius: var(--leros-radius-md);
+		background: var(--leros-primary);
 		color: #ffffff;
-		box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+		box-shadow: var(--leros-shadow-sm);
 	}
 
 	.leros-logo-image {
@@ -122,37 +123,37 @@
 	}
 
 	.leros-brand-title {
-		font-size: 18px; /* text-[18px] */
-		font-weight: 700; /* font-bold */
+		font-size: 18px;
+		font-weight: 700;
 		line-height: 1.25;
 		color: var(--leros-text-strong);
 	}
 
 	.leros-brand-version {
 		margin-top: 2px;
-		font-size: 10px; /* text-[10px] */
+		font-size: 10px;
 		line-height: 1;
 		font-weight: 500;
-		color: rgba(66, 70, 86, 0.7); /* text-on-surface-variant/70 */
+		color: color-mix(in srgb, var(--leros-text) 70%, transparent);
 	}
 
 	.leros-nav {
-		padding: 0 16px; /* px-4 */
+		padding: 0 16px;
 	}
 
 	.leros-nav-section {
-		margin-bottom: 32px; /* space-y-8 */
+		margin-bottom: 32px;
 	}
 
 	.leros-nav-section-label {
-		margin-bottom: 12px; /* mb-3 */
-		padding: 0 12px; /* px-3 */
-		font-size: 11px; /* text-[11px] */
+		margin-bottom: 12px;
+		padding: 0 12px;
+		font-size: 11px;
 		font-weight: 700;
 		line-height: 1;
 		text-transform: uppercase;
-		letter-spacing: 0.1em; /* tracking-widest */
-		color: rgba(114, 118, 135, 0.6); /* text-outline/60 */
+		letter-spacing: 0.1em;
+		color: color-mix(in srgb, var(--leros-text-subtle) 60%, transparent);
 	}
 
 	.leros-nav-item {
@@ -160,13 +161,13 @@
 		width: 100%;
 		cursor: pointer;
 		align-items: center;
-		gap: 12px; /* gap-3 */
-		border-radius: 8px; /* rounded-lg */
-		padding: 8px 12px; /* px-3 py-2 */
+		gap: 12px;
+		border-radius: var(--leros-radius-sm);
+		padding: 8px 12px;
 		text-align: left;
-		font-size: 14px; /* text-body-md */
+		font-size: 14px;
 		font-weight: 500;
-		color: rgba(66, 70, 86, 0.9); /* text-on-surface-variant */
+		color: color-mix(in srgb, var(--leros-text) 90%, transparent);
 		transition:
 			background 160ms ease,
 			color 160ms ease,
@@ -174,19 +175,19 @@
 	}
 
 	.leros-nav-item:hover {
-		background: rgba(66, 70, 86, 0.08); /* hover:bg-surface-variant/50 */
+		background: color-mix(in srgb, var(--leros-text) 8%, transparent);
 		color: var(--leros-text-strong);
 	}
 
 	.leros-nav-item[data-active="true"] {
-		background: rgba(0, 80, 203, 0.08); /* nav-item-active bg */
-		color: #0050cb; /* nav-item-active color */
+		background: var(--leros-primary-softer);
+		color: var(--leros-primary);
 		font-weight: 600;
 	}
 
 	.leros-nav-icon {
 		display: flex;
-		width: 20px; /* size-5 */
+		width: 20px;
 		height: 20px;
 		flex-shrink: 0;
 		align-items: center;
@@ -213,8 +214,8 @@
 	}
 
 	.leros-sidebar-footer {
-		border-top: 1px solid rgba(194, 198, 216, 0.3); /* border-outline-variant/30 */
-		padding: 16px 8px 0; /* px-2 pt-4 border-t mt-auto */
+		border-top: 1px solid color-mix(in srgb, var(--leros-sidebar-border) 55%, transparent);
+		padding: 16px 8px 0;
 		margin-top: auto;
 	}
 
@@ -224,9 +225,9 @@
 		cursor: pointer;
 		align-items: center;
 		gap: 12px;
-		border-radius: 12px; /* rounded-xl */
+		border-radius: var(--leros-radius-md);
 		background: transparent;
-		padding: 12px; /* px-3 py-3 */
+		padding: 12px;
 		color: var(--leros-text-strong);
 		font-size: 14px;
 		box-shadow: none;
@@ -238,7 +239,7 @@
 	.leros-profile-trigger:hover,
 	.leros-profile-trigger:focus-visible,
 	.leros-profile-trigger[aria-expanded="true"] {
-		background: rgba(66, 70, 86, 0.08); /* hover:bg-surface-variant/30 */
+		background: color-mix(in srgb, var(--leros-text) 8%, transparent);
 		color: var(--leros-text-strong);
 		box-shadow: none;
 		outline: none;
@@ -246,15 +247,15 @@
 
 	.leros-avatar {
 		display: flex;
-		width: 40px; /* w-10 */
-		height: 40px; /* h-10 */
+		width: 40px;
+		height: 40px;
 		flex-shrink: 0;
 		align-items: center;
 		justify-content: center;
 		border-radius: 999px;
-		background: #dce2f7;
-		color: #141b2b;
-		border: 1px solid rgba(194, 198, 216, 0.5); /* border-outline-variant/50 */
+		background: var(--leros-primary-softer);
+		color: var(--leros-text-strong);
+		border: 1px solid color-mix(in srgb, var(--leros-sidebar-border) 70%, transparent);
 	}
 
 	.leros-profile-menu {
