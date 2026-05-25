@@ -1,34 +1,32 @@
 package dto
 
-type SessionEventType string
+import "github.com/insmtx/Leros/backend/internal/runtime/events"
+
+type SessionEventType = events.EventType
 
 const (
-	SessionEventTypeMessageDelta    SessionEventType = "message.delta"
-	SessionEventTypeReasoningDelta  SessionEventType = "reasoning.delta"
-	SessionEventTypeMessageComplete SessionEventType = "message.complete"
-	SessionEventTypeRunStarted      SessionEventType = "run.started"
-	SessionEventTypeRunCompleted    SessionEventType = "run.completed"
-	SessionEventTypeRunFailed       SessionEventType = "run.failed"
-	SessionEventTypeToolCallStarted SessionEventType = "tool_call.started"
-	SessionEventTypeToolCallDelta   SessionEventType = "tool_call.delta"
-	SessionEventTypeToolCallResult  SessionEventType = "tool_call.result"
-	SessionEventTypeTodoSnapshot    SessionEventType = "todo.snapshot"
-	SessionEventTypeTodoUpdated     SessionEventType = "todo.updated"
+	SessionEventTypeMessageDelta    = events.EventMessageDelta
+	SessionEventTypeReasoningDelta  = events.EventReasoningDelta
+	SessionEventTypeMessageComplete = events.EventMessageComplete
+	SessionEventTypeRunStarted      = events.EventStarted
+	SessionEventTypeRunCompleted    = events.EventCompleted
+	SessionEventTypeRunFailed       = events.EventFailed
+	SessionEventTypeToolCallStarted = events.EventToolCallStarted
+	SessionEventTypeToolCallDelta   = events.EventToolCallDelta
+	SessionEventTypeToolCallResult  = events.EventToolCallResult
+	SessionEventTypeTodoSnapshot    = events.EventTodoSnapshot
+	SessionEventTypeTodoUpdated     = events.EventTodoUpdated
 )
 
 type SessionEvent struct {
-	Type      SessionEventType `json:"type"`
+	Type      events.EventType `json:"type"`
 	SessionID string           `json:"session_id"`
 	Payload   interface{}      `json:"payload"`
 	Sequence  int64            `json:"sequence"`
 	Timestamp int64            `json:"timestamp"` // Unix timestamp in milliseconds
 }
 
-type MessageDeltaPayload struct {
-	MessageID string `json:"message_id,omitempty"`
-	Role      string `json:"role"`
-	Content   string `json:"content"` // 增量文本
-}
+type MessageDeltaPayload = events.MessageDeltaPayload
 
 type RunStatusPayload struct {
 	Status  string `json:"status"`
@@ -36,11 +34,7 @@ type RunStatusPayload struct {
 	Message string `json:"message,omitempty"`
 }
 
-type ToolCallDeltaPayload struct {
-	ToolCallID string                 `json:"tool_call_id"`
-	Name       string                 `json:"name,omitempty"`
-	Arguments  map[string]interface{} `json:"arguments,omitempty"`
-}
+type ToolCallDeltaPayload = events.ToolCallPayload
 
 type ToolCallResultPayload struct {
 	ToolCallID string      `json:"tool_call_id"`
@@ -49,9 +43,4 @@ type ToolCallResultPayload struct {
 	Status     string      `json:"status"` // success | error
 }
 
-type RuntimeTodoItemPayload struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Status   string `json:"status"`
-	Priority string `json:"priority,omitempty"`
-}
+type RuntimeTodoItemPayload = events.RuntimeTodoItem

@@ -205,8 +205,11 @@ func parseSSE(reader io.Reader) error {
 
 		if line == "" {
 			if current.Event != "" || current.Data != "" {
-				handleSSEEvent(current, &printInline)
+				done := handleSSEEvent(current, &printInline)
 				current = sseEvent{}
+				if done {
+					return nil
+				}
 			}
 			continue
 		}
@@ -237,8 +240,8 @@ func parseSSE(reader io.Reader) error {
 	return nil
 }
 
-// handleSSEEvent 根据事件类型向终端输出内容。
-func handleSSEEvent(e sseEvent, printInline *bool) {
+// handleSSEEvent 根据事件类型向终端输出内容，返回 true 表示流已结束。
+func handleSSEEvent(e sseEvent, printInline *bool) bool {
 	switch events.EventType(e.Event) {
 	case events.EventMessageDelta:
 		if e.Data != "" {
@@ -294,13 +297,17 @@ func handleSSEEvent(e sseEvent, printInline *bool) {
 			*printInline = false
 		}
 		fmt.Printf("[run/failed] %s\n", e.Data)
+		return true
 	case events.EventCompleted:
 		if *printInline {
 			fmt.Println()
 			*printInline = false
 		}
+		return true
 	case events.EventStarted:
 	case events.EventCancelled:
 		fmt.Println("[run/cancelled]")
+		return true
 	}
+	return false
 }
