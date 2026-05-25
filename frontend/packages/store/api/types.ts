@@ -202,7 +202,6 @@ export type BackendSessionEventPayloadLike = BackendSessionEventPayload | Backen
 export type SSEEventPayload = BackendSessionEventPayloadLike;
 
 export type BackendProject = {
-	id: number;
 	public_id: string;
 	name: string;
 	description?: string;

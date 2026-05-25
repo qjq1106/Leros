@@ -2,7 +2,7 @@ import { apiClient } from "./client";
 import type { BackendDataResponse, BackendPaginatedResponse, BackendTask } from "./types";
 
 export type CreateTaskParams = {
-	project_id: number;
+	project_id: string;
 	title: string;
 	description?: string;
 	assignee_id?: number;
@@ -12,7 +12,7 @@ export type CreateTaskParams = {
 };
 
 export type ListTasksParams = {
-	project_id?: number;
+	project_id?: string;
 	assignee_id?: number;
 	keyword?: string;
 	status?: string;
@@ -28,7 +28,7 @@ export type GetTaskParams = {
 
 export type UpdateTaskParams = {
 	public_id: string;
-	project_id?: number;
+	project_id?: string;
 	title?: string;
 	description?: string;
 	status?: string;
