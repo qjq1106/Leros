@@ -41,11 +41,17 @@ const (
 	EventReasoningDelta EventType = "reasoning.delta"
 	// EventResult 包含运行时运行的最终助手结果。
 	EventResult EventType = "message.result"
+	// EventMessageComplete 表示消息已完成（包含完整内容）。
+	EventMessageComplete EventType = "message.complete"
 
 	// EventToolCallStarted 表示工具调用已开始。
 	EventToolCallStarted EventType = "tool_call.started"
+	// EventToolCallDelta 表示工具调用增量内容。
+	EventToolCallDelta EventType = "tool_call.delta"
 	// EventToolCallCompleted 表示工具调用已完成。
 	EventToolCallCompleted EventType = "tool_call.completed"
+	// EventToolCallResult 表示工具调用最终结果。
+	EventToolCallResult EventType = "tool_call.result"
 	// EventToolCallFailed 表示工具调用失败。
 	EventToolCallFailed EventType = "tool_call.failed"
 

@@ -482,7 +482,7 @@ func (s *sessionService) StreamSessionEvents(ctx context.Context, sessionPID str
 			return
 		}
 		if err := sink.Emit(ctx, &events.Event{
-			Type:    events.EventType(se.Type),
+			Type:    se.Type,
 			Content: toJSONString(se),
 		}); err != nil {
 			logs.ErrorContextf(ctx, "failed to emit session event for session %s: %v", sessionPID, err)
