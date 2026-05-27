@@ -2,9 +2,10 @@ import { projectApi } from "../api/projectApi";
 import { sessionApi } from "../api/sessionApi";
 import { taskApi } from "../api/taskApi";
 import { workApi } from "../api/workApi";
-import type { BackendProject, BackendSession, BackendTask } from "../api/types";
+import type { BackendArtifact, BackendProject, BackendSession, BackendTask } from "../api/types";
 import type { SliceCreator } from "../types";
 import { flattenActions } from "../utils";
+import { formatFileSize } from "../utils/format";
 
 export type WorkspaceMode = "remote" | "local";
 
@@ -109,6 +110,9 @@ export type LayoutState = {
 	activeTaskDetailProjectId: string | null;
 	activeTaskDetailTaskId: string | null;
 	activeTaskDetailSessionId: string | null;
+	projectDetailLoading: boolean;
+	projectDetailError: string | null;
+	activeProjectSessionId: string | null;
 };
 
 export type LayoutAction = Pick<LayoutActionImpl, keyof LayoutActionImpl>;
@@ -147,6 +151,20 @@ function mapBackendTask(bt: BackendTask): ProjectTask {
 		taskType: bt.task_type,
 		deadline: bt.deadline,
 		description: bt.description,
+	};
+}
+
+function mapBackendArtifact(ba: BackendArtifact): ProjectArtifact {
+	const artifactTypeMap: Record<string, ProjectArtifact["type"]> = {
+		image: "image",
+		spreadsheet: "spreadsheet",
+	};
+	return {
+		id: ba.artifact_id,
+		name: ba.filename ?? ba.title,
+		type: artifactTypeMap[ba.artifact_type] ?? "document",
+		size: formatFileSize(ba.file_size ?? 0),
+		updatedAt: "",
 	};
 }
 
@@ -200,6 +218,9 @@ const _initialState: LayoutState = {
 	activeTaskDetailProjectId: null,
 	activeTaskDetailTaskId: null,
 	activeTaskDetailSessionId: null,
+	projectDetailLoading: false,
+	projectDetailError: null,
+	activeProjectSessionId: null,
 };
 
 type SetState = (
@@ -281,7 +302,13 @@ export class LayoutActionImpl {
 			const res = await workApi.newMessage(params);
 			const data = res.data.data;
 			if (data?.project_id && data?.task_id && data?.session_id) {
-				this.openTaskDetail(data.project_id, data.task_id, data.session_id);
+				this.#set({
+					activeProjectId: data.project_id,
+					activeProjectSessionId: data.session_id,
+					activeProjectTab: "chat",
+					currentView: "project",
+					conversationListOpen: false,
+				});
 			}
 		} catch (err) {
 			console.error("sendWorkbenchMessage error:", err);
@@ -456,6 +483,42 @@ export class LayoutActionImpl {
 			}));
 		} catch (err) {
 			console.error("deleteTask error:", err);
+		}
+	};
+
+	fetchProjectDetail = async (projectId: string) => {
+		const project = this.#get().projects.find((p) => p.id === projectId);
+		if (!project) return;
+
+		this.#set({ projectDetailLoading: true, projectDetailError: null });
+		try {
+			const res = await projectApi.detail({ public_id: projectId });
+			const detail = res.data.data;
+			if (!detail) throw new Error("No data returned");
+
+			const tasks = (detail.tasks ?? []).map(mapBackendTask);
+			const artifacts = (detail.artifacts ?? []).map(mapBackendArtifact);
+
+			this.#set((s) => ({
+				projects: s.projects.map((p) =>
+					p.id === projectId
+						? {
+								...p,
+								name: detail.name,
+								description: detail.description ?? "",
+								objective: detail.objective,
+								updatedAt: new Date(detail.updated_at).getTime(),
+								tasks,
+								artifacts,
+								files: artifacts,
+							}
+						: p,
+				),
+				projectDetailLoading: false,
+			}));
+		} catch (err) {
+			console.error("fetchProjectDetail error:", err);
+			this.#set({ projectDetailLoading: false, projectDetailError: "获取项目详情失败" });
 		}
 	};
 
