@@ -46,6 +46,7 @@ func (r *Runner) defaultPipeline() Pipeline {
 	return Pipeline{
 		steps.NormalizeStep{},
 		steps.JournalStep{},
+		steps.ModelStep{},
 		steps.ContextStep{Builder: r.builder},
 		steps.AuthorizeStep{},
 		steps.StartEventStep{},

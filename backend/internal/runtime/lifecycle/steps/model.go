@@ -1,0 +1,86 @@
+package steps
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/insmtx/Leros/backend/internal/agent"
+	"github.com/insmtx/Leros/backend/internal/modelrouter"
+	"github.com/insmtx/Leros/backend/internal/worker/identity"
+)
+
+// ModelStep initializes model routing based on the current request configuration.
+// It writes the real upstream configuration to modelrouter store and modifies the
+// request's BaseURL to use the built-in worker model proxy.
+type ModelStep struct{}
+
+func (ModelStep) Name() string {
+	return "model"
+}
+
+func (s ModelStep) Run(ctx context.Context, state *State) error {
+	return initModelRouting(ctx, state.Request)
+}
+
+// initModelRouting validates and initializes model routing for the request.
+func initModelRouting(_ context.Context, req *agent.RequestContext) error {
+	if req == nil {
+		return fmt.Errorf("request context is required")
+	}
+
+	// Validate required fields
+	if strings.TrimSpace(req.Model.Provider) == "" {
+		return fmt.Errorf("llm provider is required")
+	}
+	if strings.TrimSpace(req.Model.Model) == "" {
+		return fmt.Errorf("llm model is required")
+	}
+	if strings.TrimSpace(req.Model.APIKey) == "" {
+		return fmt.Errorf("llm api_key is required")
+	}
+
+	// Write the original upstream config to modelrouter store
+	// Keep the original BaseURL and BaseURLHasV1 from the request
+	upstreamCfg := modelrouter.UpstreamConfig{
+		ModelName:    strings.TrimSpace(req.Model.Model),
+		Provider:     strings.TrimSpace(req.Model.Provider),
+		BaseURL:      strings.TrimSpace(req.Model.BaseURL),
+		BaseURLHasV1: req.Model.BaseURLHasV1,
+		APIKey:       strings.TrimSpace(req.Model.APIKey),
+		Protocol:     modelrouter.DefaultProtocolForProvider(req.Model.Provider),
+		Temperature:  req.Model.Temperature,
+	}
+	modelrouter.DefaultStore().Put(upstreamCfg)
+
+	// Change the request's BaseURL to use the built-in worker model proxy
+	// Keep BaseURLHasV1 as the original value from the request
+	req.Model.BaseURL = workerModelProxyBaseURL()
+
+	return nil
+}
+
+// workerModelProxyBaseURL returns the built-in model proxy BaseURL for the worker.
+func workerModelProxyBaseURL() string {
+	addr := strings.TrimSpace(identity.WorkerAddr())
+	if addr == "" {
+		return ""
+	}
+	addr = strings.TrimRight(addr, "/")
+	if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
+		return ensureV1Suffix(addr)
+	}
+	if strings.HasPrefix(addr, ":") {
+		return ensureV1Suffix("http://127.0.0.1" + addr)
+	}
+	return ensureV1Suffix("http://" + addr)
+}
+
+// ensureV1Suffix ensures the BaseURL ends with /v1 if needed.
+func ensureV1Suffix(baseURL string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" || strings.HasSuffix(baseURL, "/v1") {
+		return baseURL
+	}
+	return baseURL + "/v1"
+}
