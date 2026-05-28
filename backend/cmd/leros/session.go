@@ -70,6 +70,27 @@ var sessionLsCmd = &cobra.Command{
 	},
 }
 
+var sessionGetCmd = &cobra.Command{
+	Use:   "get <session_id>",
+	Short: "Get session details",
+	Long:  `Get detailed information about a specific session by its public ID.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		go func() {
+			sessionID := args[0]
+			result, err := cli.GetSession(lifecycle.Std().Context(), sessionServerAddr, sessionID)
+			if err != nil {
+				logs.Errorf("get session: %v", err)
+				lifecycle.Std().Exit()
+				return
+			}
+			printSessionDetail(result)
+			lifecycle.Std().Exit()
+		}()
+		lifecycle.Std().WaitExit()
+	},
+}
+
 func printSessions(list *contract.SessionList) {
 	if sessionJSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -95,9 +116,41 @@ func printSessions(list *contract.SessionList) {
 	fmt.Fprintf(os.Stderr, "\nTotal: %d, Offset: %d, Limit: %d\n", list.Total, list.Offset, list.Limit)
 }
 
+func printSessionDetail(s *contract.Session) {
+	if sessionJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(s)
+		return
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintf(w, "SessionID:\t%s\n", s.SessionID)
+	fmt.Fprintf(w, "Type:\t%s\n", s.Type)
+	fmt.Fprintf(w, "Status:\t%s\n", s.Status)
+	fmt.Fprintf(w, "Title:\t%s\n", s.Title)
+	fmt.Fprintf(w, "TitleManuallySet:\t%v\n", s.TitleManuallySet)
+	fmt.Fprintf(w, "Uin:\t%d\n", s.Uin)
+	fmt.Fprintf(w, "OrgID:\t%d\n", s.OrgID)
+	fmt.Fprintf(w, "AssistantID:\t%d\n", s.AssistantID)
+	fmt.Fprintf(w, "AllocatedAssistantID:\t%d\n", s.AllocatedAssistantID)
+	fmt.Fprintf(w, "AssistantCode:\t%s\n", s.AssistantCode)
+	fmt.Fprintf(w, "MessageCount:\t%d\n", s.MessageCount)
+	if s.LastMessageAt != nil {
+		fmt.Fprintf(w, "LastMessageAt:\t%s\n", s.LastMessageAt.Format("2006-01-02T15:04:05Z"))
+	}
+	if s.ExpiredAt != nil {
+		fmt.Fprintf(w, "ExpiredAt:\t%s\n", s.ExpiredAt.Format("2006-01-02T15:04:05Z"))
+	}
+	fmt.Fprintf(w, "CreatedAt:\t%s\n", s.CreatedAt.Format("2006-01-02T15:04:05Z"))
+	fmt.Fprintf(w, "UpdatedAt:\t%s\n", s.UpdatedAt.Format("2006-01-02T15:04:05Z"))
+	w.Flush()
+}
+
 func init() {
-	sessionLsCmd.Flags().StringVar(&sessionServerAddr, "server-addr", "127.0.0.1:8080", "Leros server address (host:port)")
-	sessionLsCmd.Flags().BoolVar(&sessionJSON, "json", false, "Output in JSON format")
+	sessionCmd.PersistentFlags().StringVar(&sessionServerAddr, "server-addr", "127.0.0.1:8080", "Leros server address (host:port)")
+	sessionCmd.PersistentFlags().BoolVar(&sessionJSON, "json", false, "Output in JSON format")
+
 	sessionLsCmd.Flags().StringVar(&sessionKeyword, "keyword", "", "Filter by title or public_id keyword")
 	sessionLsCmd.Flags().StringVar(&sessionStatus, "status", "", "Filter by status")
 	sessionLsCmd.Flags().StringVar(&sessionType, "type", "", "Filter by session type")
@@ -106,5 +159,6 @@ func init() {
 	sessionLsCmd.Flags().IntVar(&sessionLimit, "limit", 20, "Pagination limit")
 
 	sessionCmd.AddCommand(sessionLsCmd)
+	sessionCmd.AddCommand(sessionGetCmd)
 	rootCmd.AddCommand(sessionCmd)
 }

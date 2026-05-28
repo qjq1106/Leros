@@ -74,6 +74,27 @@ var taskLsCmd = &cobra.Command{
 	},
 }
 
+var taskGetCmd = &cobra.Command{
+	Use:   "get <task_id>",
+	Short: "Get task details",
+	Long:  `Get detailed information about a specific task by its public ID.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		go func() {
+			publicID := args[0]
+			result, err := cli.GetTask(lifecycle.Std().Context(), taskServerAddr, publicID)
+			if err != nil {
+				logs.Errorf("get task: %v", err)
+				lifecycle.Std().Exit()
+				return
+			}
+			printTaskDetail(result)
+			lifecycle.Std().Exit()
+		}()
+		lifecycle.Std().WaitExit()
+	},
+}
+
 func printTasks(list *contract.TaskList) {
 	if taskJSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -99,9 +120,41 @@ func printTasks(list *contract.TaskList) {
 	fmt.Fprintf(os.Stderr, "\nTotal: %d, Offset: %d, Limit: %d\n", list.Total, list.Offset, list.Limit)
 }
 
+func printTaskDetail(t *contract.Task) {
+	if taskJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(t)
+		return
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintf(w, "PublicID:\t%s\n", t.PublicID)
+	fmt.Fprintf(w, "Title:\t%s\n", t.Title)
+	fmt.Fprintf(w, "Description:\t%s\n", t.Description)
+	fmt.Fprintf(w, "Status:\t%s\n", t.Status)
+	fmt.Fprintf(w, "TaskType:\t%s\n", t.TaskType)
+	fmt.Fprintf(w, "OrgID:\t%d\n", t.OrgID)
+	fmt.Fprintf(w, "OwnerID:\t%d\n", t.OwnerID)
+	fmt.Fprintf(w, "ProjectID:\t%s\n", t.ProjectID)
+	if t.AssigneeID != nil {
+		fmt.Fprintf(w, "AssigneeID:\t%d\n", *t.AssigneeID)
+	}
+	if t.SessionID != nil {
+		fmt.Fprintf(w, "SessionID:\t%d\n", *t.SessionID)
+	}
+	if t.Deadline != nil {
+		fmt.Fprintf(w, "Deadline:\t%s\n", t.Deadline.Format("2006-01-02T15:04:05Z"))
+	}
+	fmt.Fprintf(w, "CreatedAt:\t%s\n", t.CreatedAt.Format("2006-01-02T15:04:05Z"))
+	fmt.Fprintf(w, "UpdatedAt:\t%s\n", t.UpdatedAt.Format("2006-01-02T15:04:05Z"))
+	w.Flush()
+}
+
 func init() {
-	taskLsCmd.Flags().StringVar(&taskServerAddr, "server-addr", "127.0.0.1:8080", "Leros server address (host:port)")
-	taskLsCmd.Flags().BoolVar(&taskJSON, "json", false, "Output in JSON format")
+	taskCmd.PersistentFlags().StringVar(&taskServerAddr, "server-addr", "127.0.0.1:8080", "Leros server address (host:port)")
+	taskCmd.PersistentFlags().BoolVar(&taskJSON, "json", false, "Output in JSON format")
+
 	taskLsCmd.Flags().StringVar(&taskKeyword, "keyword", "", "Filter by title/description keyword")
 	taskLsCmd.Flags().StringVar(&taskStatus, "status", "", "Filter by status")
 	taskLsCmd.Flags().StringVar(&taskProjectID, "project-id", "", "Filter by project ID")
@@ -111,5 +164,6 @@ func init() {
 	taskLsCmd.Flags().IntVar(&taskLimit, "limit", 20, "Pagination limit")
 
 	taskCmd.AddCommand(taskLsCmd)
+	taskCmd.AddCommand(taskGetCmd)
 	rootCmd.AddCommand(taskCmd)
 }
