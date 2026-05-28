@@ -118,14 +118,15 @@ type CompleteSessionMessageRequest struct {
 
 // FailedSessionMessageRequest persists a failed assistant message.
 type FailedSessionMessageRequest struct {
-	SessionID string                `json:"session_id"`
-	Content   string                `json:"content,omitempty"`
-	Chunks    []types.MessageChunk  `json:"chunks,omitempty"`
-	ErrorMsg  string                `json:"error_msg"`
-	ErrorCode string                `json:"error_code,omitempty"`
-	Status    string                `json:"status,omitempty"`
-	Metadata  *types.ObjectMetadata `json:"metadata,omitempty"`
-	Usage     *types.MessageUsage   `json:"usage,omitempty"`
-	Seq       int64                 `json:"seq"`
-	CreatedAt time.Time             `json:"created_at"`
+	SessionID string                  `json:"session_id"`
+	Content   string                  `json:"content,omitempty"`
+	Chunks    []types.MessageChunk    `json:"chunks,omitempty"`
+	Artifacts []types.MessageArtifact `json:"artifacts,omitempty"`
+	ErrorMsg  string                  `json:"error_msg"`
+	ErrorCode string                  `json:"error_code,omitempty"`
+	Status    string                  `json:"status,omitempty"`
+	Metadata  *types.ObjectMetadata   `json:"metadata,omitempty"`
+	Usage     *types.MessageUsage     `json:"usage,omitempty"`
+	Seq       int64                   `json:"seq"`
+	CreatedAt time.Time               `json:"created_at"`
 }

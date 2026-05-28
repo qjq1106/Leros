@@ -5,13 +5,16 @@ import (
 	"testing"
 )
 
-func TestNewArtifactDeclaredPayloadIsMinimal(t *testing.T) {
+func TestNewArtifactDeclaredPayloadCarriesPersistenceFields(t *testing.T) {
 	event := NewArtifactDeclared(ArtifactPayload{
 		ArtifactID:   "art_123",
 		Title:        "Report",
 		Filename:     "report.md",
+		Description:  "final report",
 		MimeType:     "text/markdown",
 		ArtifactType: "file",
+		StorageKey:   "projects/1/prj/repo/report.md",
+		Sha256:       "abc123",
 	})
 	if event.Type != EventArtifactDeclared {
 		t.Fatalf("event type = %q, want %q", event.Type, EventArtifactDeclared)
@@ -20,7 +23,12 @@ func TestNewArtifactDeclaredPayloadIsMinimal(t *testing.T) {
 		t.Fatal("expected payload")
 	}
 	payload := string(event.Payload)
-	for _, forbidden := range []string{"tool_call_id", "path", "description", "download_url", "status", "is_final"} {
+	for _, expected := range []string{"artifact_id", "description", "storage_key", "sha256"} {
+		if !strings.Contains(payload, expected) {
+			t.Fatalf("payload should contain %q: %s", expected, payload)
+		}
+	}
+	for _, forbidden := range []string{"tool_call_id", "download_url", "is_final"} {
 		if strings.Contains(payload, forbidden) {
 			t.Fatalf("payload should not contain %q: %s", forbidden, payload)
 		}

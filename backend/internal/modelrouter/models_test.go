@@ -34,7 +34,7 @@ func TestResolverUsesWorkerCache(t *testing.T) {
 		APIKey:       "sk-test",
 	})
 
-	cfg, err := NewResolver().Resolve(t.Context(), 1, "gpt-4.1")
+	cfg, err := NewResolver().Resolve(t.Context(), "gpt-4.1")
 	if err != nil {
 		t.Fatalf("resolve cached model: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestResolverUsesCurrentCachedModelWhenRequestModelIsEmpty(t *testing.T) {
 		APIKey:    "anthropic-test",
 	})
 
-	cfg, err := NewResolver().Resolve(t.Context(), 1, "")
+	cfg, err := NewResolver().Resolve(t.Context(), "")
 	if err != nil {
 		t.Fatalf("resolve current cached model: %v", err)
 	}

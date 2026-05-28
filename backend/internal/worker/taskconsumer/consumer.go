@@ -10,7 +10,6 @@ import (
 
 	"github.com/insmtx/Leros/backend/internal/agent"
 	eventbus "github.com/insmtx/Leros/backend/internal/infra/mq"
-	"github.com/insmtx/Leros/backend/internal/modelrouter"
 	"github.com/insmtx/Leros/backend/internal/worker/protocol"
 	agentworkspace "github.com/insmtx/Leros/backend/internal/workspace"
 	"github.com/insmtx/Leros/backend/pkg/dm"
@@ -107,7 +106,6 @@ func (c *Consumer) handleEvent(ctx context.Context, msg *nats.Msg) error {
 	if err := validateModelConfig(taskMsg.Body.Model); err != nil {
 		return err
 	}
-	modelrouter.DefaultStore().Put(modelConfigFromTask(taskMsg.Body.Model))
 
 	logs.InfoContextf(ctx,
 		"Received worker task: msg_id=%s task_id=%s run_id=%s org_id=%s worker_id=%s session_id=%s task_type=%s",
@@ -135,17 +133,6 @@ func validateModelConfig(model protocol.ModelOptions) error {
 		return fmt.Errorf("llm api_key is required")
 	}
 	return nil
-}
-
-func modelConfigFromTask(model protocol.ModelOptions) modelrouter.UpstreamConfig {
-	return modelrouter.UpstreamConfig{
-		ModelName:    strings.TrimSpace(model.Model),
-		Provider:     strings.TrimSpace(model.Provider),
-		BaseURL:      strings.TrimSpace(model.BaseURL),
-		BaseURLHasV1: model.BaseURLHasV1,
-		APIKey:       strings.TrimSpace(model.APIKey),
-		Protocol:     modelrouter.DefaultProtocolForProvider(model.Provider),
-	}
 }
 
 func (c *Consumer) schedule(ctx context.Context, taskMsg protocol.WorkerTaskMessage) {

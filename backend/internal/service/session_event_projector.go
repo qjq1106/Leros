@@ -60,13 +60,13 @@ func ProjectStreamMessage(streamMsg protocol.MessageStreamMessage) (*dto.Session
 			return nil, false
 		}
 		event.Type = events.EventArtifactDeclared
-		event.Payload = *streamMsg.Body.Payload.Artifact
+		event.Payload = publicStreamArtifactPayload(*streamMsg.Body.Payload.Artifact)
 	case protocol.StreamEventRunStarted:
 		event.Type = events.EventStarted
 	case protocol.StreamEventRunCompleted:
 		event.Type = events.EventCompleted
 		if streamMsg.Body.RunCompleted != nil {
-			event.Payload = streamMsg.Body.RunCompleted
+			event.Payload = publicRunCompletedPayload(streamMsg.Body.RunCompleted)
 		} else {
 			event.Payload = dto.RunStatusPayload{
 				Status:  "completed",
@@ -179,6 +179,30 @@ func ProjectRunEventRecord(sessionID string, chunk types.MessageChunk) (*contrac
 	}
 
 	return event, true
+}
+
+func publicStreamArtifactPayload(payload events.ArtifactPayload) events.ArtifactPayload {
+	return events.ArtifactPayload{
+		ArtifactID:   payload.ArtifactID,
+		Title:        payload.Title,
+		Filename:     payload.Filename,
+		MimeType:     payload.MimeType,
+		ArtifactType: payload.ArtifactType,
+	}
+}
+
+func publicRunCompletedPayload(payload *events.RunCompletedPayload) *events.RunCompletedPayload {
+	if payload == nil {
+		return nil
+	}
+	result := *payload
+	if len(payload.Artifacts) > 0 {
+		result.Artifacts = make([]events.ArtifactPayload, 0, len(payload.Artifacts))
+		for _, artifact := range payload.Artifacts {
+			result.Artifacts = append(result.Artifacts, publicStreamArtifactPayload(artifact))
+		}
+	}
+	return &result
 }
 
 func decodeChunkPayload[T any](chunk types.MessageChunk) (T, bool) {

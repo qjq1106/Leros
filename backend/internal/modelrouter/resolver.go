@@ -15,10 +15,7 @@ func NewResolver() *Resolver {
 }
 
 // Resolve returns the cached upstream model configuration for one model name.
-func (r *Resolver) Resolve(ctx context.Context, orgID uint, modelName string) (*UpstreamConfig, error) {
-	_ = ctx
-	_ = orgID
-
+func (r *Resolver) Resolve(_ context.Context, modelName string) (*UpstreamConfig, error) {
 	if r == nil || DefaultStore() == nil {
 		return nil, errors.New("llm model cache is not initialized")
 	}

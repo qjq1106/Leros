@@ -11,8 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/ygpkg/yg-go/logs"
-
-	"github.com/insmtx/Leros/backend/internal/worker/identity"
 )
 
 // RegisterRoutes registers model routing endpoints backed by the worker-local model store.
@@ -28,12 +26,6 @@ func RegisterRoutes(r gin.IRouter) {
 
 func handleModelRoute(resolver *Resolver, entryProtocol Protocol) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		orgID := identity.OrgID()
-		if orgID == 0 {
-			c.JSON(http.StatusBadRequest, newEntryError(entryProtocol, "organization not configured"))
-			return
-		}
-
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, newEntryError(entryProtocol, "failed to read request body"))
@@ -42,7 +34,7 @@ func handleModelRoute(resolver *Resolver, entryProtocol Protocol) gin.HandlerFun
 
 		modelName := extractModelField(body)
 
-		cfg, err := resolver.Resolve(c.Request.Context(), orgID, modelName)
+		cfg, err := resolver.Resolve(c.Request.Context(), modelName)
 		if err != nil {
 			logs.Warnf("modelrouter: resolve model failed: %v", err)
 			c.JSON(http.StatusBadRequest, newEntryError(entryProtocol, err.Error()))

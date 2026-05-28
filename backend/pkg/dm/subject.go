@@ -40,6 +40,12 @@ func SessionResultStreamSubject(orgid uint, sessionid string) (string, error) {
 	return fmt.Sprintf("org.%d.session.%s.message.stream", orgid, sessionid), nil
 }
 
+// SessionResultStreamWildcardSubject 构造会话结果流 topic 的通配符模式。
+// 示例: org.*.session.*.message.stream
+func SessionResultStreamWildcardSubject() string {
+	return "org.*.session.*.message.stream"
+}
+
 // SessionMessageCompletedSubject 构造会话完成 topic，格式为 "org.{org_id}.session.{session_id}.completed"。
 func SessionMessageCompletedSubject(orgid uint, sessionid string) (string, error) {
 	if orgid == 0 {

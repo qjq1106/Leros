@@ -131,7 +131,7 @@ func TestRunnerEmitsArtifactsBeforeCompletedArchive(t *testing.T) {
 	}), nil)
 	runner.SetArtifactRecorder(fakeArtifactRecorder{
 		artifacts: []events.ArtifactPayload{
-			{ArtifactID: "art_test", Title: "Report", Filename: "report.md", MimeType: "text/markdown", ArtifactType: "file"},
+			{ArtifactID: "art_test", Title: "Report", Filename: "report.md", MimeType: "text/markdown", ArtifactType: "file", StorageKey: "projects/1/prj/repo/report.md"},
 		},
 	})
 

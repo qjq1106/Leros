@@ -619,7 +619,8 @@ func (s *sessionService) CompleteSessionMessage(ctx context.Context, req *contra
 		if err := db.CreateMessage(ctx, tx, msgEntity); err != nil {
 			return fmt.Errorf("create message for %s: %w", req.SessionID, err)
 		}
-		bindDeclaredArtifacts(ctx, tx, req.Artifacts, session, msgEntity)
+		// 不再绑定 artifact 与 message 的关联关系，artifact 通过 session_id 关联查询
+		// bindDeclaredArtifacts(ctx, tx, req.Artifacts, session, msgEntity)
 		return nil
 	}); err != nil {
 		return err
@@ -632,29 +633,6 @@ func (s *sessionService) CompleteSessionMessage(ctx context.Context, req *contra
 
 	logs.DebugContextf(ctx, "persisted completed session message: session_id=%s seq=%d", req.SessionID, sequence)
 	return nil
-}
-
-func bindDeclaredArtifacts(ctx context.Context, tx *gorm.DB, artifacts []types.MessageArtifact, session *types.Session, message *types.SessionMessage) {
-	if len(artifacts) == 0 || session == nil || message == nil {
-		return
-	}
-	for _, item := range artifacts {
-		artifactID := strings.TrimSpace(item.ArtifactID)
-		if artifactID == "" {
-			continue
-		}
-		artifact, err := db.GetArtifactByPublicID(ctx, tx, session.OrgID, artifactID)
-		if err != nil {
-			logs.WarnContextf(ctx, "find declared artifact %s failed: %v", artifactID, err)
-			continue
-		}
-		if artifact == nil {
-			continue
-		}
-		if err := db.BindArtifactMessage(ctx, tx, artifact.ID, session.ID, message.ID); err != nil {
-			logs.WarnContextf(ctx, "bind declared artifact %s to message failed: %v", artifactID, err)
-		}
-	}
 }
 
 func (s *sessionService) FailedSessionMessage(ctx context.Context, req *contract.FailedSessionMessageRequest) error {
@@ -692,6 +670,9 @@ func (s *sessionService) FailedSessionMessage(ctx context.Context, req *contract
 	if req.Chunks != nil && len(req.Chunks) > 0 {
 		msgEntity.Chunks = req.Chunks
 	}
+	if len(req.Artifacts) > 0 {
+		msgEntity.Artifacts = req.Artifacts
+	}
 	if req.Metadata != nil {
 		msgEntity.Metadata = *req.Metadata
 	}
@@ -705,8 +686,15 @@ func (s *sessionService) FailedSessionMessage(ctx context.Context, req *contract
 		msgEntity.Metadata.Extra["error_code"] = req.ErrorCode
 	}
 
-	if err := db.CreateMessage(ctx, s.db, msgEntity); err != nil {
-		return fmt.Errorf("create message for %s: %w", req.SessionID, err)
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := db.CreateMessage(ctx, tx, msgEntity); err != nil {
+			return fmt.Errorf("create message for %s: %w", req.SessionID, err)
+		}
+		// 不再绑定 artifact 与 message 的关联关系，artifact 通过 session_id 关联查询
+		// bindDeclaredArtifacts(ctx, tx, req.Artifacts, session, msgEntity)
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	now := time.Now()

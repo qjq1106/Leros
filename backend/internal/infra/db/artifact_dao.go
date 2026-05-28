@@ -40,19 +40,6 @@ func GetArtifactByPublicID(ctx context.Context, db *gorm.DB, orgID uint, publicI
 	return &entity, nil
 }
 
-// BindArtifactMessage attaches an existing artifact to a session message.
-func BindArtifactMessage(ctx context.Context, db *gorm.DB, artifactID uint, sessionID uint, messageID uint) error {
-	updates := &types.Artifact{
-		SessionID: &sessionID,
-		MessageID: &messageID,
-	}
-	return db.WithContext(ctx).
-		Model(&types.Artifact{}).
-		Where("id = ?", artifactID).
-		Select("session_id", "message_id").
-		Updates(updates).Error
-}
-
 // ListTaskArtifacts returns completed artifacts for a task.
 func ListTaskArtifacts(ctx context.Context, db *gorm.DB, orgID uint, taskID uint) ([]*types.Artifact, error) {
 	var entities []*types.Artifact

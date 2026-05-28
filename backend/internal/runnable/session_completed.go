@@ -3,6 +3,7 @@ package runnable
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/nats-io/nats.go"
 
@@ -49,6 +50,7 @@ func handleSessionCompletedMessage(ctx context.Context, service contract.Session
 			logs.WarnContextf(ctx, "run completed message missing run_completed payload: session_id=%s seq=%d", sessionID, streamMsg.Body.Seq)
 			return
 		}
+		projectCompletedArtifacts(completed)
 		req := &contract.CompleteSessionMessageRequest{
 			SessionID: sessionID,
 			Content:   completed.Result.Message,
@@ -66,23 +68,26 @@ func handleSessionCompletedMessage(ctx context.Context, service contract.Session
 	case protocol.StreamEventRunFailed:
 		errMsg := streamMsg.Body.Payload.Content
 		status := string(types.MessageStatusFailed)
-		if streamMsg.Body.RunCompleted != nil && streamMsg.Body.RunCompleted.Result.Message != "" {
-			errMsg = streamMsg.Body.RunCompleted.Result.Message
-			if streamMsg.Body.RunCompleted.Status == string(types.MessageStatusCancelled) {
+		completed := streamMsg.Body.RunCompleted
+		if completed != nil && completed.Result.Message != "" {
+			errMsg = completed.Result.Message
+			if completed.Status == string(types.MessageStatusCancelled) {
 				status = string(types.MessageStatusCancelled)
 			}
 		}
 		if streamMsg.Body.Error != nil {
 			errMsg = streamMsg.Body.Error.Message
 		}
+		projectCompletedArtifacts(completed)
 		req := &contract.FailedSessionMessageRequest{
 			SessionID: sessionID,
 			Content:   errMsg,
 			ErrorMsg:  errMsg,
 			Status:    status,
-			Chunks:    runEventChunks(streamMsg.Body.RunCompleted.Events),
-			Metadata:  messageMetadataFromRunCompleted(streamMsg.Body.RunCompleted),
-			Usage:     messageUsageFromRuntime(streamMsg.Body.RunCompleted.Usage),
+			Chunks:    runEventChunks(runCompletedEvents(completed)),
+			Artifacts: messageArtifactsFromRunCompleted(runCompletedArtifacts(completed)),
+			Metadata:  messageMetadataFromRunCompleted(completed),
+			Usage:     messageUsageFromRuntime(runCompletedUsage(completed)),
 			Seq:       streamMsg.Body.Seq,
 			CreatedAt: streamMsg.CreatedAt,
 		}
@@ -96,6 +101,112 @@ func handleSessionCompletedMessage(ctx context.Context, service contract.Session
 	default:
 		logs.DebugContextf(ctx, "ignoring session completed event: %s", streamMsg.Body.Event)
 	}
+}
+
+func projectCompletedArtifacts(completed *events.RunCompletedPayload) {
+	if completed == nil {
+		return
+	}
+	completed.Artifacts = publicArtifactPayloads(completed.Artifacts)
+	updateRunArtifactEventRecords(completed.Events, completed.Artifacts)
+}
+
+func updateRunArtifactEventRecords(records []events.RunEventRecord, artifacts []events.ArtifactPayload) {
+	if len(records) == 0 || len(artifacts) == 0 {
+		return
+	}
+	next := 0
+	for i := range records {
+		if records[i].Type != events.EventArtifactDeclared {
+			continue
+		}
+		if next >= len(artifacts) {
+			return
+		}
+		payload, err := json.Marshal(artifacts[next])
+		if err != nil {
+			continue
+		}
+		records[i].Payload = payload
+		next++
+	}
+}
+
+func publicArtifactPayloads(artifacts []events.ArtifactPayload) []events.ArtifactPayload {
+	if len(artifacts) == 0 {
+		return nil
+	}
+	result := make([]events.ArtifactPayload, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		result = append(result, publicArtifactPayload(artifact))
+	}
+	return result
+}
+
+func publicArtifactPayload(artifact events.ArtifactPayload) events.ArtifactPayload {
+	return events.ArtifactPayload{
+		ArtifactID:   strings.TrimSpace(artifact.ArtifactID),
+		Title:        strings.TrimSpace(artifact.Title),
+		Filename:     artifactFilename(artifact),
+		MimeType:     strings.TrimSpace(artifact.MimeType),
+		ArtifactType: artifactType(artifact.ArtifactType),
+	}
+}
+
+func runCompletedEvents(completed *events.RunCompletedPayload) []events.RunEventRecord {
+	if completed == nil {
+		return nil
+	}
+	return completed.Events
+}
+
+func runCompletedArtifacts(completed *events.RunCompletedPayload) []events.ArtifactPayload {
+	if completed == nil {
+		return nil
+	}
+	return completed.Artifacts
+}
+
+func runCompletedUsage(completed *events.RunCompletedPayload) *events.UsagePayload {
+	if completed == nil {
+		return nil
+	}
+	return completed.Usage
+}
+
+func artifactTitle(item events.ArtifactPayload) string {
+	if strings.TrimSpace(item.Title) != "" {
+		return strings.TrimSpace(item.Title)
+	}
+	return strings.TrimSpace(item.RelativePath)
+}
+
+func artifactFilename(item events.ArtifactPayload) string {
+	if strings.TrimSpace(item.Filename) != "" {
+		return strings.TrimSpace(item.Filename)
+	}
+	return strings.TrimSpace(item.RelativePath)
+}
+
+func artifactType(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return string(types.ArtifactTypeFile)
+	}
+	return strings.TrimSpace(value)
+}
+
+func artifactSource(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return string(types.ArtifactSourceAgentDeclared)
+	}
+	return strings.TrimSpace(value)
+}
+
+func artifactStatus(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return string(types.ArtifactStatusCompleted)
+	}
+	return strings.TrimSpace(value)
 }
 
 func runEventChunks(records []events.RunEventRecord) []types.MessageChunk {

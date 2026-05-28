@@ -15,3 +15,8 @@ func SessionTitleConsumer() string {
 func SessionCompletedConsumer() string {
 	return "session-completed-handler"
 }
+
+// SessionArtifactDeclaredConsumer 构造会话产物声明处理器的持久化消费者名称。
+func SessionArtifactDeclaredConsumer() string {
+	return "session-artifact-declared-handler"
+}

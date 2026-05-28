@@ -3,14 +3,20 @@ package runnable
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 
 	"github.com/insmtx/Leros/backend/internal/api/contract"
 	"github.com/insmtx/Leros/backend/internal/runtime/events"
 	"github.com/insmtx/Leros/backend/internal/worker/protocol"
+	"github.com/insmtx/Leros/backend/pkg/leros"
+	"github.com/insmtx/Leros/backend/types"
 )
 
 func TestHandleSessionCompletedMessageUsesRunCompletedPayload(t *testing.T) {
@@ -94,6 +100,139 @@ func TestHandleSessionCompletedMessageRequiresRunCompletedPayload(t *testing.T) 
 
 	if service.completeReq != nil {
 		t.Fatalf("expected no complete request, got %#v", service.completeReq)
+	}
+}
+
+func TestHandleSessionCompletedMessageProjectsRunArtifacts(t *testing.T) {
+	service := &recordingSessionService{}
+	streamMsg := protocol.MessageStreamMessage{
+		CreatedAt: time.Now().UTC(),
+		Route:     protocol.RouteContext{SessionID: "sess_test"},
+		Body: protocol.StreamBody{
+			Seq:   9,
+			Event: protocol.StreamEventRunCompleted,
+			RunCompleted: &events.RunCompletedPayload{
+				Result: events.RunResultPayload{Message: "done"},
+				Artifacts: []events.ArtifactPayload{
+					{
+						ArtifactID:   "art_worker",
+						Title:        "Report",
+						Filename:     "report.md",
+						Description:  "final report",
+						MimeType:     "text/markdown",
+						ArtifactType: "file",
+						StorageKey:   "projects/1/prj/repo/report.md",
+					},
+				},
+				Events: []events.RunEventRecord{
+					{
+						Seq:  2,
+						Type: events.EventArtifactDeclared,
+					},
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(streamMsg)
+	if err != nil {
+		t.Fatalf("marshal stream message: %v", err)
+	}
+
+	handleSessionCompletedMessage(context.Background(), service, &nats.Msg{Data: body})
+
+	if service.completeReq == nil {
+		t.Fatal("expected CompleteSessionMessage to be called")
+	}
+	if len(service.completeReq.Artifacts) != 1 || service.completeReq.Artifacts[0].ArtifactID != "art_worker" {
+		t.Fatalf("expected projected artifact ref, got %#v", service.completeReq.Artifacts)
+	}
+	if len(service.completeReq.Chunks) != 1 {
+		t.Fatalf("expected artifact chunk, got %#v", service.completeReq.Chunks)
+	}
+	var chunkPayload events.ArtifactPayload
+	if err := json.Unmarshal(service.completeReq.Chunks[0].Payload, &chunkPayload); err != nil {
+		t.Fatalf("decode artifact chunk: %v", err)
+	}
+	if chunkPayload.ArtifactID != "art_worker" || chunkPayload.StorageKey != "" || chunkPayload.Description != "" {
+		t.Fatalf("expected public artifact payload in chunk, got %#v", chunkPayload)
+	}
+}
+
+func TestHandleSessionArtifactDeclaredMessagePersistsArtifactFromWorkerStorage(t *testing.T) {
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	if err := database.AutoMigrate(&types.Session{}, &types.Artifact{}); err != nil {
+		t.Fatalf("migrate database: %v", err)
+	}
+	projectID := uint(101)
+	taskID := uint(202)
+	session := &types.Session{
+		PublicID:  "sess_test",
+		OrgID:     7,
+		Uin:       9,
+		ProjectID: &projectID,
+		TaskID:    &taskID,
+	}
+	if err := database.Create(session).Error; err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	root := t.TempDir()
+	t.Setenv(leros.EnvWorkspaceRoot, root)
+	storageKey := "projects/7/prj/repo/report.md"
+	path := filepath.Join(root, "7", "3", "workspace", filepath.FromSlash(storageKey))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create artifact dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("hello artifact"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	streamMsg := protocol.MessageStreamMessage{
+		CreatedAt: time.Now().UTC(),
+		Route: protocol.RouteContext{
+			OrgID:     7,
+			SessionID: "sess_test",
+			WorkerID:  3,
+		},
+		Body: protocol.StreamBody{
+			Seq:   2,
+			Event: protocol.StreamEventArtifactDeclared,
+			Payload: protocol.StreamPayload{
+				Artifact: &events.ArtifactPayload{
+					ArtifactID:   "art_worker",
+					Title:        "Report",
+					Filename:     "report.md",
+					Description:  "final report",
+					MimeType:     "text/markdown",
+					ArtifactType: "file",
+					StorageKey:   storageKey,
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(streamMsg)
+	if err != nil {
+		t.Fatalf("marshal stream message: %v", err)
+	}
+
+	handleSessionArtifactDeclaredMessage(context.Background(), &declaredArtifactPersister{db: database}, &nats.Msg{Data: body})
+
+	var artifact types.Artifact
+	if err := database.Where("public_id = ?", "art_worker").First(&artifact).Error; err != nil {
+		t.Fatalf("load artifact: %v", err)
+	}
+	if artifact.OrgID != 7 || artifact.OwnerID != 9 || artifact.ProjectID != projectID || artifact.TaskID != taskID {
+		t.Fatalf("artifact ownership not from session: %#v", artifact)
+	}
+	if artifact.SessionID == nil || *artifact.SessionID != session.ID {
+		t.Fatalf("expected artifact session id %d, got %#v", session.ID, artifact.SessionID)
+	}
+	if artifact.StorageKey != storageKey || artifact.FileURL == "" || artifact.FileSize != int64(len("hello artifact")) || artifact.Sha256 == "" {
+		t.Fatalf("unexpected artifact storage fields: %#v", artifact)
+	}
+	if artifact.Metadata.Extra["worker_id"] == nil {
+		t.Fatalf("expected worker_id metadata, got %#v", artifact.Metadata)
 	}
 }
 

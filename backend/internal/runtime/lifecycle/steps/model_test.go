@@ -85,7 +85,7 @@ func TestModelStepWritesUpstreamConfigAndProxiesRequest(t *testing.T) {
 	}
 
 	// Verify upstream config in store has original BaseURL
-	cfg, err := modelrouter.NewResolver().Resolve(context.Background(), 0, "gpt-4.1")
+	cfg, err := modelrouter.NewResolver().Resolve(context.Background(), "gpt-4.1")
 	if err != nil {
 		t.Fatalf("failed to resolve upstream config: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestModelStepWithEmptyWorkerAddress(t *testing.T) {
 	}
 
 	// Verify upstream config still written to store with original BaseURL
-	cfg, err := modelrouter.NewResolver().Resolve(context.Background(), 0, "gpt-4.1")
+	cfg, err := modelrouter.NewResolver().Resolve(context.Background(), "gpt-4.1")
 	if err != nil {
 		t.Fatalf("failed to resolve upstream config: %v", err)
 	}

@@ -128,18 +128,32 @@ func artifactPayloadsLocked(source []events.Event) []events.ArtifactPayload {
 		if err != nil {
 			continue
 		}
-		artifactID := strings.TrimSpace(payload.ArtifactID)
-		if artifactID == "" {
+		key := artifactPayloadKey(payload)
+		if key == "" {
 			continue
 		}
-		if _, ok := seen[artifactID]; ok {
+		if _, ok := seen[key]; ok {
 			continue
 		}
-		payload.ArtifactID = artifactID
 		artifacts = append(artifacts, payload)
-		seen[artifactID] = struct{}{}
+		seen[key] = struct{}{}
 	}
 	return artifacts
+}
+
+func artifactPayloadKey(payload events.ArtifactPayload) string {
+	for _, value := range []string{
+		payload.ArtifactID,
+		payload.StorageKey,
+		payload.RelativePath,
+		payload.Filename,
+		payload.Title,
+	} {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 // StartedAt 返回 run.started 事件所记录的时间。

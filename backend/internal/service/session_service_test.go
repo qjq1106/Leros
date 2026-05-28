@@ -1012,9 +1012,7 @@ func TestCompleteSessionMessageBindsExistingDeclaredArtifact(t *testing.T) {
 	if len(artifacts) != 1 {
 		t.Fatalf("expected existing artifact to be reused, got %d rows", len(artifacts))
 	}
-	if artifacts[0].MessageID == nil || *artifacts[0].MessageID == 0 {
-		t.Fatalf("expected artifact message_id to be bound: %#v", artifacts[0].MessageID)
-	}
+	// 不再验证 artifact.message_id 绑定，artifact 通过 session_id 关联查询
 	result, err := service.GetSessionMessages(ctx, session.PublicID, 1, 20)
 	if err != nil {
 		t.Fatalf("GetSessionMessages failed: %v", err)

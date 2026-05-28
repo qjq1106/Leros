@@ -3,9 +3,8 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
@@ -68,14 +67,9 @@ func (s *artifactService) GetArtifactDownload(ctx context.Context, artifactPubli
 	if artifact == nil {
 		return nil, errors.New("artifact not found")
 	}
-	// TODO: persist and use the worker_id that produced this artifact.
-	path, err := agentworkspace.ArtifactStoragePath(artifact.OrgID, defaultArtifactWorkerID, artifact.StorageKey)
+	file, err := agentworkspace.OpenArtifactStorageFile(artifact.OrgID, artifactWorkerID(artifact), artifact.StorageKey)
 	if err != nil {
 		return nil, err
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open artifact file: %w", err)
 	}
 	return &contract.ArtifactDownload{
 		FileName: artifactDownloadName(artifact),
@@ -112,6 +106,40 @@ func artifactDownloadName(artifact *types.Artifact) string {
 		return strings.TrimSpace(artifact.Title)
 	}
 	return filepath.Base(strings.TrimSpace(artifact.RelativePath))
+}
+
+func artifactWorkerID(artifact *types.Artifact) uint {
+	if artifact == nil || artifact.Metadata.Extra == nil {
+		return defaultArtifactWorkerID
+	}
+	value, ok := artifact.Metadata.Extra["worker_id"]
+	if !ok {
+		return defaultArtifactWorkerID
+	}
+	switch typed := value.(type) {
+	case uint:
+		if typed != 0 {
+			return typed
+		}
+	case int:
+		if typed > 0 {
+			return uint(typed)
+		}
+	case int64:
+		if typed > 0 {
+			return uint(typed)
+		}
+	case float64:
+		if typed > 0 {
+			return uint(typed)
+		}
+	case string:
+		parsed, err := strconv.ParseUint(strings.TrimSpace(typed), 10, 64)
+		if err == nil && parsed > 0 {
+			return uint(parsed)
+		}
+	}
+	return defaultArtifactWorkerID
 }
 
 var _ contract.ArtifactService = (*artifactService)(nil)

@@ -105,10 +105,12 @@ func TestProjectStreamMessageProjectsTodoSnapshotPayloadAsArray(t *testing.T) {
 
 func TestProjectArtifactDeclaredEvents(t *testing.T) {
 	payload := events.ArtifactPayload{
-		ArtifactID: "art_test",
-		Title:      "Report",
-		Filename:   "report.md",
-		MimeType:   "text/markdown",
+		ArtifactID:  "art_test",
+		Title:       "Report",
+		Filename:    "report.md",
+		Description: "final report",
+		MimeType:    "text/markdown",
+		StorageKey:  "projects/1/prj/repo/report.md",
 	}
 	streamMsg := protocol.MessageStreamMessage{
 		CreatedAt: time.UnixMilli(1779243000000).UTC(),
@@ -132,6 +134,9 @@ func TestProjectArtifactDeclaredEvents(t *testing.T) {
 	if !ok || projected.ArtifactID != "art_test" || projected.Filename != "report.md" || projected.MimeType != "text/markdown" {
 		t.Fatalf("unexpected realtime payload: %#v", event.Payload)
 	}
+	if projected.Description != "" || projected.StorageKey != "" {
+		t.Fatalf("realtime artifact payload should be public only: %#v", projected)
+	}
 
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -149,5 +154,46 @@ func TestProjectArtifactDeclaredEvents(t *testing.T) {
 	historicalPayload, ok := historical.Payload.(events.ArtifactPayload)
 	if !ok || historicalPayload.ArtifactID != "art_test" || historicalPayload.Filename != "report.md" || historicalPayload.MimeType != "text/markdown" {
 		t.Fatalf("unexpected historical payload: %#v", historical.Payload)
+	}
+}
+
+func TestProjectRunCompletedArtifactsAsPublicPayloads(t *testing.T) {
+	streamMsg := protocol.MessageStreamMessage{
+		CreatedAt: time.UnixMilli(1779243000000).UTC(),
+		Route:     protocol.RouteContext{SessionID: "sess_test"},
+		Body: protocol.StreamBody{
+			Seq:   11,
+			Event: protocol.StreamEventRunCompleted,
+			RunCompleted: &events.RunCompletedPayload{
+				Status: "completed",
+				Result: events.RunResultPayload{
+					Message: "done",
+				},
+				Artifacts: []events.ArtifactPayload{
+					{
+						ArtifactID:  "art_test",
+						Title:       "Report",
+						Filename:    "report.md",
+						Description: "final report",
+						MimeType:    "text/markdown",
+						StorageKey:  "projects/1/prj/repo/report.md",
+					},
+				},
+			},
+		},
+	}
+	event, ok := ProjectStreamMessage(streamMsg)
+	if !ok {
+		t.Fatal("expected run completed event to project")
+	}
+	payload, ok := event.Payload.(*events.RunCompletedPayload)
+	if !ok {
+		t.Fatalf("unexpected payload type: %#v", event.Payload)
+	}
+	if len(payload.Artifacts) != 1 || payload.Artifacts[0].ArtifactID != "art_test" {
+		t.Fatalf("unexpected artifacts: %#v", payload.Artifacts)
+	}
+	if payload.Artifacts[0].Description != "" || payload.Artifacts[0].StorageKey != "" {
+		t.Fatalf("run completed artifact payload should be public only: %#v", payload.Artifacts[0])
 	}
 }
