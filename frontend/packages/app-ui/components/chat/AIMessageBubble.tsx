@@ -1,13 +1,21 @@
 "use client";
 
-import { formatTime, useChatStore } from "@leros/store";
-import type { Message } from "@leros/store/types/chat";
+import {
+	formatTime,
+	mapBackendArtifactToProjectArtifact,
+	type ProjectArtifact,
+	useChatStore,
+	useLayoutStore,
+} from "@leros/store";
+import { artifactApi } from "@leros/store/api/artifactApi";
+import type { Message, MessageArtifact } from "@leros/store/types/chat";
 import { Avatar, AvatarFallback } from "@leros/ui/components/ui/avatar";
 import { Button } from "@leros/ui/components/ui/button";
-import { Check, Copy, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { Check, Copy, FileImage, FileText, LoaderCircle, RefreshCw, Table2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ArtifactPreviewDialog } from "../layout/ArtifactPreviewDialog";
 import { TodoListBlock } from "./TodoListBlock";
 import { ToolCallBlock } from "./ToolCallBlock";
 
@@ -42,6 +50,7 @@ export function AIMessageBubble({
 	const hasContent = content.trim().length > 0;
 	const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
 	const hasTodos = message.todos && message.todos.length > 0;
+	const hasArtifacts = message.artifacts && message.artifacts.length > 0;
 
 	return (
 		<div data-slot="ai-message" className="group flex items-start gap-3">
@@ -67,6 +76,12 @@ export function AIMessageBubble({
 					</div>
 				)}
 
+				{hasArtifacts && message.artifacts && (
+					<div className="mb-3">
+						<MessageArtifactList artifacts={message.artifacts} />
+					</div>
+				)}
+
 				{hasContent && (
 					<div className="w-fit max-w-[min(780px,92%)] rounded-2xl rounded-tl-md bg-white/90 px-4 py-3 text-sm leading-7 text-slate-700 shadow-sm ring-1 ring-slate-200/50">
 						<div className="prose prose-slate prose-sm max-w-none prose-p:my-1.5 prose-pre:my-2 prose-ul:my-1.5 prose-ol:my-1.5">
@@ -78,7 +93,7 @@ export function AIMessageBubble({
 					</div>
 				)}
 
-				{!hasContent && !hasToolCalls && !hasTodos && isStreaming && (
+				{!hasContent && !hasToolCalls && !hasTodos && !hasArtifacts && isStreaming && (
 					<div className="w-fit rounded-2xl rounded-tl-md bg-white/90 px-4 py-3 shadow-sm ring-1 ring-slate-200/50">
 						<div className="flex items-center gap-1">
 							<span className="size-1.5 rounded-full bg-slate-400 animate-pulse" />
@@ -115,4 +130,103 @@ export function AIMessageBubble({
 			</div>
 		</div>
 	);
+}
+
+function MessageArtifactList({ artifacts }: { artifacts: MessageArtifact[] }) {
+	const [previewArtifact, setPreviewArtifact] = useState<ProjectArtifact | null>(null);
+	const [taskArtifacts, setTaskArtifacts] = useState<ProjectArtifact[]>([]);
+	const [loadingArtifactId, setLoadingArtifactId] = useState<string | null>(null);
+	const activeTaskDetailTaskId = useLayoutStore((s) => s.activeTaskDetailTaskId);
+	const artifactKey = useMemo(
+		() => artifacts.map((artifact) => artifact.id).join("|"),
+		[artifacts],
+	);
+	const visibleArtifacts = useMemo(() => {
+		const artifactIds = new Set(artifacts.map((artifact) => artifact.id));
+		return taskArtifacts.filter((artifact) => artifactIds.has(artifact.id));
+	}, [artifacts, taskArtifacts]);
+
+	useEffect(() => {
+		if (!activeTaskDetailTaskId) {
+			setTaskArtifacts([]);
+			return;
+		}
+		const taskId = activeTaskDetailTaskId;
+
+		let cancelled = false;
+		async function fetchTaskArtifacts() {
+			setLoadingArtifactId("__list__");
+			try {
+				const res = await artifactApi.listTaskArtifacts(taskId);
+				if (cancelled) return;
+				setTaskArtifacts((res.data.data ?? []).map(mapBackendArtifactToProjectArtifact));
+			} catch (err) {
+				if (cancelled) return;
+				console.error("MessageArtifactList fetch task artifacts error:", err);
+				setTaskArtifacts([]);
+			} finally {
+				if (!cancelled) setLoadingArtifactId(null);
+			}
+		}
+		fetchTaskArtifacts();
+		return () => {
+			cancelled = true;
+		};
+	}, [activeTaskDetailTaskId, artifactKey]);
+
+	if (!activeTaskDetailTaskId || visibleArtifacts.length === 0) return null;
+
+	return (
+		<>
+			<div className="grid max-w-[min(780px,92%)] gap-2 sm:grid-cols-2">
+				{visibleArtifacts.map((artifact) => (
+					<button
+						type="button"
+						key={artifact.id}
+						onClick={() => setPreviewArtifact(artifact)}
+						disabled={loadingArtifactId === artifact.id}
+						className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/70 bg-white/90 px-3.5 py-3 text-left shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50/60"
+						title="预览产物"
+					>
+						<div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-slate-600">
+							{loadingArtifactId === artifact.id ? (
+								<LoaderCircle className="size-4 animate-spin" />
+							) : (
+								<MessageArtifactIcon type={artifact.type} />
+							)}
+						</div>
+						<div className="min-w-0">
+							<div className="truncate text-sm font-semibold leading-5 text-slate-700">
+								{artifact.title || artifact.name}
+							</div>
+							<div className="mt-0.5 truncate text-xs leading-4 text-slate-400">
+								{artifact.name}
+								{artifact.size ? ` · ${artifact.size}` : ""}
+							</div>
+						</div>
+					</button>
+				))}
+			</div>
+			<ArtifactPreviewDialog
+				artifact={previewArtifact}
+				open={previewArtifact !== null}
+				onOpenChange={(open) => {
+					if (!open) setPreviewArtifact(null);
+				}}
+			/>
+		</>
+	);
+}
+
+function MessageArtifactIcon({ type }: { type: MessageArtifact["type"] }) {
+	const className = "size-4";
+
+	switch (type) {
+		case "spreadsheet":
+			return <Table2 className={className} />;
+		case "image":
+			return <FileImage className={className} />;
+		default:
+			return <FileText className={className} />;
+	}
 }

@@ -94,6 +94,17 @@ export type BackendRuntimeTodoItem = {
 	priority?: string;
 };
 
+export type BackendSessionArtifactPayload = {
+	artifact_id?: string;
+	title?: string;
+	filename?: string;
+	description?: string;
+	artifact_type?: string;
+	mime_type?: string;
+	file_size?: number;
+	sha256?: string;
+};
+
 export type BackendDigitalAssistant = {
 	id: number;
 	code: string;
@@ -190,6 +201,15 @@ export type BackendSessionEventPayload = {
 	};
 	metadata?: BackendMessageMetadata;
 	events?: BackendSessionEvent[];
+	artifacts?: BackendSessionArtifactPayload[];
+	artifact_id?: string;
+	title?: string;
+	filename?: string;
+	description?: string;
+	artifact_type?: string;
+	mime_type?: string;
+	file_size?: number;
+	sha256?: string;
 	input_tokens?: number;
 	output_tokens?: number;
 	total_tokens?: number;

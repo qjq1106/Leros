@@ -1,3 +1,4 @@
+export { artifactApi, getArtifactDownloadUrl } from "./artifactApi";
 export { apiClient } from "./client";
 export { API_BASE_URL } from "./config";
 export type {
@@ -33,10 +34,6 @@ export type {
 } from "./taskApi";
 export { taskApi } from "./taskApi";
 export type {
-	NewMessageParams,
-} from "./workApi";
-export { workApi } from "./workApi";
-export type {
 	BackendAssistantConfig,
 	BackendBaseResponse,
 	BackendChannelRef,
@@ -62,3 +59,5 @@ export type {
 	SSEEventPayload,
 	SSEMessageEvent,
 } from "./types";
+export type { NewMessageParams } from "./workApi";
+export { workApi } from "./workApi";

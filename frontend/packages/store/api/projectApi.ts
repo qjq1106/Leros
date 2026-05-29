@@ -1,5 +1,10 @@
 import { apiClient } from "./client";
-import type { BackendDataResponse, BackendPaginatedResponse, BackendProject, BackendProjectDetail } from "./types";
+import type {
+	BackendDataResponse,
+	BackendPaginatedResponse,
+	BackendProject,
+	BackendProjectDetail,
+} from "./types";
 
 export type CreateProjectParams = {
 	name: string;

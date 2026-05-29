@@ -12,6 +12,7 @@
 		"./components/*": "./components/*.tsx"
 	},
 	"dependencies": {
+		"@eigenpal/docx-editor-react": "^1.0.3",
 		"@leros/store": "workspace:*",
 		"@leros/ui": "workspace:*",
 		"lucide-react": "catalog:",

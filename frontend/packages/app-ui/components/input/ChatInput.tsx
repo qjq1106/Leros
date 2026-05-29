@@ -1,6 +1,6 @@
 "use client";
 
-import { useChatStore } from "@leros/store";
+import { useChatStore, useLayoutStore } from "@leros/store";
 import type { Attachment } from "@leros/store/types/chat";
 import { Button } from "@leros/ui/components/ui/button";
 import { cn } from "@leros/ui/lib/utils";
@@ -24,12 +24,14 @@ export function ChatInput({ variant = "default" }: { variant?: "default" | "proj
 		modelOptions,
 		setInputText,
 		sendMessage,
+		sendProjectMessage,
 		cancelGeneration,
 		addAttachment,
 		removeAttachment,
 		setInputFocused,
 		setSelectedModel,
 	} = useChatStore((s) => s);
+	const { activeProjectId, currentView } = useLayoutStore((s) => s);
 
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,12 +50,24 @@ export function ChatInput({ variant = "default" }: { variant?: "default" | "proj
 
 	const submitMessage = useCallback(() => {
 		if (inputText.trim() || inputAttachments.length > 0) {
-			sendMessage(inputText, inputAttachments);
+			if (isProjectVariant && currentView === "project") {
+				sendProjectMessage(inputText, activeProjectId);
+			} else {
+				sendMessage(inputText, inputAttachments);
+			}
 			if (textareaRef.current) {
 				textareaRef.current.style.height = "auto";
 			}
 		}
-	}, [inputText, inputAttachments, sendMessage]);
+	}, [
+		inputText,
+		inputAttachments,
+		isProjectVariant,
+		currentView,
+		activeProjectId,
+		sendMessage,
+		sendProjectMessage,
+	]);
 
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLTextAreaElement>) => {

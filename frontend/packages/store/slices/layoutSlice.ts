@@ -1,8 +1,9 @@
+import { getArtifactDownloadUrl } from "../api/artifactApi";
 import { projectApi } from "../api/projectApi";
 import { sessionApi } from "../api/sessionApi";
 import { taskApi } from "../api/taskApi";
-import { workApi } from "../api/workApi";
 import type { BackendArtifact, BackendProject, BackendSession, BackendTask } from "../api/types";
+import { workApi } from "../api/workApi";
 import type { SliceCreator } from "../types";
 import { flattenActions } from "../utils";
 import { formatFileSize } from "../utils/format";
@@ -47,9 +48,15 @@ export type ProjectTask = {
 export type ProjectArtifact = {
 	id: string;
 	name: string;
+	title: string;
+	description?: string;
 	type: "document" | "spreadsheet" | "image";
+	artifactType: string;
+	mimeType?: string;
 	size: string;
 	updatedAt: string;
+	downloadUrl: string;
+	sha256?: string;
 };
 
 export type Project = {
@@ -155,7 +162,7 @@ function mapBackendTask(bt: BackendTask): ProjectTask {
 	};
 }
 
-function mapBackendArtifact(ba: BackendArtifact): ProjectArtifact {
+export function mapBackendArtifactToProjectArtifact(ba: BackendArtifact): ProjectArtifact {
 	const artifactTypeMap: Record<string, ProjectArtifact["type"]> = {
 		image: "image",
 		spreadsheet: "spreadsheet",
@@ -163,9 +170,15 @@ function mapBackendArtifact(ba: BackendArtifact): ProjectArtifact {
 	return {
 		id: ba.artifact_id,
 		name: ba.filename ?? ba.title,
+		title: ba.title,
+		description: ba.description,
 		type: artifactTypeMap[ba.artifact_type] ?? "document",
+		artifactType: ba.artifact_type,
+		mimeType: ba.mime_type,
 		size: formatFileSize(ba.file_size ?? 0),
 		updatedAt: "",
+		downloadUrl: getArtifactDownloadUrl(ba.artifact_id),
+		sha256: ba.sha256,
 	};
 }
 
@@ -306,9 +319,10 @@ export class LayoutActionImpl {
 			if (data?.project_id && data?.task_id && data?.session_id) {
 				this.#set({
 					activeProjectId: data.project_id,
-					activeProjectSessionId: data.session_id,
-					activeProjectTab: "chat",
-					currentView: "project",
+					activeTaskDetailProjectId: data.project_id,
+					activeTaskDetailTaskId: data.task_id,
+					activeTaskDetailSessionId: data.session_id,
+					currentView: "taskDetail",
 					conversationListOpen: false,
 				});
 			}
@@ -333,8 +347,8 @@ export class LayoutActionImpl {
 			if (items.length === 0) return;
 			const apiProjects = items.map(mapBackendProject);
 			this.#set((state) => {
-				const localProjects = state.projects.filter((p) =>
-					!apiProjects.some((ap) => ap.id === p.id),
+				const localProjects = state.projects.filter(
+					(p) => !apiProjects.some((ap) => ap.id === p.id),
 				);
 				return { projects: [...apiProjects, ...localProjects] };
 			});
@@ -343,7 +357,11 @@ export class LayoutActionImpl {
 		}
 	};
 
-	createProject = async (params: { name: string; description?: string; metadata?: Record<string, unknown> }) => {
+	createProject = async (params: {
+		name: string;
+		description?: string;
+		metadata?: Record<string, unknown>;
+	}) => {
 		try {
 			const res = await projectApi.create(params);
 			const bp = res.data.data;
@@ -403,9 +421,7 @@ export class LayoutActionImpl {
 			const items = res.data.data?.items ?? [];
 			this.#set((s) => ({
 				projects: s.projects.map((p) =>
-					p.id === projectId
-						? { ...p, tasks: items.map(mapBackendTask) }
-						: p,
+					p.id === projectId ? { ...p, tasks: items.map(mapBackendTask) } : p,
 				),
 			}));
 		} catch (err) {
@@ -413,14 +429,17 @@ export class LayoutActionImpl {
 		}
 	};
 
-	createTask = async (projectId: string, params: {
-		title: string;
-		description?: string;
-		assignee_id?: number;
-		task_type?: string;
-		deadline?: string;
-		metadata?: Record<string, unknown>;
-	}) => {
+	createTask = async (
+		projectId: string,
+		params: {
+			title: string;
+			description?: string;
+			assignee_id?: number;
+			task_type?: string;
+			deadline?: string;
+			metadata?: Record<string, unknown>;
+		},
+	) => {
 		const state = this.#get();
 		const project = state.projects.find((p) => p.id === projectId);
 		if (!project) return null;
@@ -432,9 +451,7 @@ export class LayoutActionImpl {
 			const item = mapBackendTask(bt);
 			this.#set((s) => ({
 				projects: s.projects.map((p) =>
-					p.id === projectId
-						? { ...p, tasks: [item, ...p.tasks], updatedAt: Date.now() }
-						: p,
+					p.id === projectId ? { ...p, tasks: [item, ...p.tasks], updatedAt: Date.now() } : p,
 				),
 			}));
 			return item;
@@ -499,8 +516,6 @@ export class LayoutActionImpl {
 			if (!detail) throw new Error("No data returned");
 
 			const tasks = (detail.tasks ?? []).map(mapBackendTask);
-			const artifacts = (detail.artifacts ?? []).map(mapBackendArtifact);
-
 			this.#set((s) => ({
 				projects: s.projects.map((p) =>
 					p.id === projectId
@@ -511,8 +526,8 @@ export class LayoutActionImpl {
 								objective: detail.objective,
 								updatedAt: new Date(detail.updated_at).getTime(),
 								tasks,
-								artifacts,
-								files: artifacts,
+								artifacts: [],
+								files: [],
 							}
 						: p,
 				),
