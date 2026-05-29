@@ -1,3 +1,4 @@
+export { artifactApi, getArtifactDownloadUrl } from "./api/artifactApi";
 export { API_BASE_URL } from "./api/config";
 export { digitalAssistantApi } from "./api/digitalAssistantApi";
 export { sessionApi } from "./api/sessionApi";
@@ -26,6 +27,7 @@ export type {
 	Workspace,
 	WorkspaceMode,
 } from "./slices/layoutSlice";
+export { mapBackendArtifactToProjectArtifact } from "./slices/layoutSlice";
 export type { Topic, TopicAction, TopicState, TopicStore } from "./slices/topicSlice";
 export type { PublicActions, SliceCreator } from "./types";
 export type {
@@ -42,6 +44,7 @@ export type {
 export type {
 	Attachment,
 	Message,
+	MessageArtifact,
 	MessageMetadata,
 	MessageRole,
 	ModelOption,

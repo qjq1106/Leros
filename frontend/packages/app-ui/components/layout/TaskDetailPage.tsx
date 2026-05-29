@@ -1,7 +1,8 @@
 "use client";
 
-import type { ProjectTask } from "@leros/store";
-import { useChatStore, useLayoutStore } from "@leros/store";
+import type { ProjectArtifact, ProjectTask } from "@leros/store";
+import { mapBackendArtifactToProjectArtifact, useChatStore, useLayoutStore } from "@leros/store";
+import { artifactApi } from "@leros/store/api/artifactApi";
 import { taskApi } from "@leros/store/api/taskApi";
 import { cn } from "@leros/ui/lib/utils";
 import {
@@ -10,12 +11,16 @@ import {
 	Calendar,
 	CheckCircle2,
 	Circle,
+	FileImage,
+	FileText,
 	LoaderCircle,
+	Table2,
 	Tag,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MessageTimeline } from "../chat/MessageTimeline";
 import { ChatInput } from "../input/ChatInput";
+import { ArtifactPreviewDialog } from "./ArtifactPreviewDialog";
 
 const STATUS_LABEL: Record<string, string> = {
 	todo: "待办",
@@ -33,39 +38,74 @@ export function TaskDetailPage() {
 		switchProject,
 	} = useLayoutStore((s) => s);
 
-	const { setActiveSession, loadConversationMessages, resetLocalMessages } = useChatStore((s) => s);
+	const {
+		activeSessionId,
+		isGenerating,
+		setActiveSession,
+		loadConversationMessages,
+		resetLocalMessages,
+	} = useChatStore((s) => s);
 
 	const [task, setTask] = useState<ProjectTask | null>(null);
+	const [artifacts, setArtifacts] = useState<ProjectArtifact[]>([]);
+	const [previewArtifact, setPreviewArtifact] = useState<ProjectArtifact | null>(null);
 
 	const project = projects.find((p) => p.id === activeTaskDetailProjectId);
+
+	const fetchArtifacts = useCallback(async (taskId: string) => {
+		try {
+			const res = await artifactApi.listTaskArtifacts(taskId);
+			setArtifacts((res.data.data ?? []).map(mapBackendArtifactToProjectArtifact));
+		} catch (err) {
+			console.error("TaskDetailPage fetch artifacts error:", err);
+			setArtifacts([]);
+		}
+	}, []);
 
 	useEffect(() => {
 		if (!activeTaskDetailSessionId) return;
 
 		setActiveSession(activeTaskDetailSessionId);
+		if (activeSessionId === activeTaskDetailSessionId && isGenerating) return;
 		loadConversationMessages(activeTaskDetailSessionId);
-	}, [activeTaskDetailSessionId, setActiveSession, loadConversationMessages]);
+	}, [
+		activeTaskDetailSessionId,
+		activeSessionId,
+		isGenerating,
+		setActiveSession,
+		loadConversationMessages,
+	]);
 
 	useEffect(() => {
 		if (!activeTaskDetailTaskId) return;
 
-		taskApi.get({ public_id: activeTaskDetailTaskId }).then((res) => {
-			const bt = res.data.data;
-			if (bt) {
-				setTask({
-					id: bt.public_id,
-					title: bt.title,
-					meta: bt.description ?? bt.task_type ?? "",
-					status: (bt.status as ProjectTask["status"]) ?? "todo",
-					taskType: bt.task_type,
-					deadline: bt.deadline,
-					description: bt.description,
-				});
-			}
-		}).catch((err) => {
-			console.error("TaskDetailPage fetch task error:", err);
-		});
-	}, [activeTaskDetailTaskId]);
+		taskApi
+			.get({ public_id: activeTaskDetailTaskId })
+			.then((res) => {
+				const bt = res.data.data;
+				if (bt) {
+					setTask({
+						id: bt.public_id,
+						title: bt.title,
+						meta: bt.description ?? bt.task_type ?? "",
+						status: (bt.status as ProjectTask["status"]) ?? "todo",
+						taskType: bt.task_type,
+						deadline: bt.deadline,
+						description: bt.description,
+					});
+				}
+			})
+			.catch((err) => {
+				console.error("TaskDetailPage fetch task error:", err);
+			});
+
+		fetchArtifacts(activeTaskDetailTaskId);
+	}, [activeTaskDetailTaskId, fetchArtifacts]);
+
+	useEffect(() => {
+		if (!activeTaskDetailTaskId || isGenerating) return;
+		fetchArtifacts(activeTaskDetailTaskId);
+	}, [activeTaskDetailTaskId, fetchArtifacts, isGenerating]);
 
 	useEffect(() => {
 		return () => {
@@ -82,16 +122,21 @@ export function TaskDetailPage() {
 	}
 
 	return (
-		<div data-slot="task-detail-page" className="flex h-full flex-1 flex-col bg-[var(--leros-surface)]">
+		<div
+			data-slot="task-detail-page"
+			className="flex h-full flex-1 flex-col bg-[var(--leros-surface)]"
+		>
 			<header className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--leros-control-border)] bg-[var(--leros-surface-soft)] px-10">
 				<div className="flex items-center gap-3 text-[var(--leros-text-muted)]">
 					{project && (
 						<>
-						<button
-							type="button"
-							onClick={() => activeTaskDetailProjectId && switchProject(activeTaskDetailProjectId)}
-							className="text-xs font-semibold uppercase tracking-widest hover:text-[var(--leros-text-strong)]"
-						>
+							<button
+								type="button"
+								onClick={() =>
+									activeTaskDetailProjectId && switchProject(activeTaskDetailProjectId)
+								}
+								className="text-xs font-semibold uppercase tracking-widest hover:text-[var(--leros-text-strong)]"
+							>
 								{project.name}
 							</button>
 							<span className="text-[var(--leros-text-subtle)]">/</span>
@@ -189,9 +234,25 @@ export function TaskDetailPage() {
 								</div>
 							</section>
 						)}
+						<section>
+							<div className="mb-3 flex items-center justify-between">
+								<h3 className="text-xs font-semibold text-[var(--leros-text-muted)]">任务产物</h3>
+								<span className="rounded-md bg-[var(--leros-chat-control-bg)] px-2 py-0.5 text-xs font-semibold text-[var(--leros-text)]">
+									{artifacts.length} 个
+								</span>
+							</div>
+							<TaskArtifactList artifacts={artifacts} onPreview={setPreviewArtifact} />
+						</section>
 					</div>
 				</aside>
 			</div>
+			<ArtifactPreviewDialog
+				artifact={previewArtifact}
+				open={previewArtifact !== null}
+				onOpenChange={(open) => {
+					if (!open) setPreviewArtifact(null);
+				}}
+			/>
 		</div>
 	);
 }
@@ -210,4 +271,59 @@ function TaskChatEmptyState() {
 			</div>
 		</div>
 	);
+}
+
+function TaskArtifactList({
+	artifacts,
+	onPreview,
+}: {
+	artifacts: ProjectArtifact[];
+	onPreview: (artifact: ProjectArtifact) => void;
+}) {
+	if (artifacts.length === 0) {
+		return (
+			<div className="rounded-lg border border-dashed border-[var(--leros-control-border)] px-4 py-8 text-center text-xs text-[var(--leros-text-muted)]">
+				暂无产物
+			</div>
+		);
+	}
+
+	return (
+		<div className="space-y-3">
+			{artifacts.map((artifact) => (
+				<button
+					type="button"
+					key={artifact.id}
+					onClick={() => onPreview(artifact)}
+					className="flex w-full items-center gap-3 rounded-lg border border-[var(--leros-control-border)] bg-[var(--leros-surface)] px-3.5 py-3 text-left shadow-sm transition-colors hover:border-[var(--leros-primary-soft)] hover:bg-[var(--leros-primary-softer)]/35"
+					title="预览产物"
+				>
+					<div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--leros-primary-softer)] text-[var(--leros-text)]">
+						<TaskArtifactIcon type={artifact.type} />
+					</div>
+					<div className="min-w-0">
+						<div className="truncate text-sm font-semibold leading-5 text-[var(--leros-text-strong)]">
+							{artifact.name}
+						</div>
+						<div className="mt-1 truncate text-xs leading-4 text-[var(--leros-text-muted)]">
+							{artifact.size}
+						</div>
+					</div>
+				</button>
+			))}
+		</div>
+	);
+}
+
+function TaskArtifactIcon({ type }: { type: ProjectArtifact["type"] }) {
+	const className = "size-4";
+
+	switch (type) {
+		case "spreadsheet":
+			return <Table2 className={className} />;
+		case "image":
+			return <FileImage className={className} />;
+		default:
+			return <FileText className={className} />;
+	}
 }

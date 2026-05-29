@@ -1,19 +1,23 @@
 import { FetchSSEClient } from "@leros/ui/lib/fetch-sse";
+import { getArtifactDownloadUrl } from "../api/artifactApi";
 import { API_BASE_URL } from "../api/config";
 import { sessionApi } from "../api/sessionApi";
 import type {
 	BackendMessage,
 	BackendMessageChunk,
 	BackendRuntimeTodoItem,
+	BackendSessionArtifactPayload,
 	BackendSessionEventPayload,
 	BackendToolCall,
 	SSEMessageEvent,
 } from "../api/types";
+import { workApi } from "../api/workApi";
 import { mockModelOptions } from "../mocks/chatMocks";
 import type { SliceCreator } from "../types";
 import type {
 	Attachment,
 	Message,
+	MessageArtifact,
 	MessageMetadata,
 	MessageRole,
 	ModelOption,
@@ -23,6 +27,7 @@ import type {
 	ToolCallStatus,
 } from "../types/chat";
 import { flattenActions } from "../utils";
+import { formatFileSize } from "../utils/format";
 
 export type ChatState = {
 	messagesMap: Record<string, Message>;
@@ -219,6 +224,52 @@ function mapTodoItems(items: BackendRuntimeTodoItem[]): RuntimeTodoItem[] {
 	}));
 }
 
+function mapArtifactPayload(payload: BackendSessionArtifactPayload): MessageArtifact | undefined {
+	const artifactID = payload.artifact_id?.trim();
+	if (!artifactID) return undefined;
+
+	const artifactType = payload.artifact_type?.trim() || "file";
+	const mimeType = payload.mime_type?.trim();
+	const filename = payload.filename?.trim();
+	const title = payload.title?.trim() || filename || artifactID;
+	const type =
+		mimeType?.startsWith("image/") || artifactType === "image"
+			? "image"
+			: artifactType === "spreadsheet"
+				? "spreadsheet"
+				: "document";
+
+	return {
+		id: artifactID,
+		name: filename || title,
+		title,
+		description: payload.description?.trim() || undefined,
+		type,
+		artifactType,
+		mimeType,
+		size: formatFileSize(payload.file_size ?? 0),
+		updatedAt: "",
+		downloadUrl: getArtifactDownloadUrl(artifactID),
+		sha256: payload.sha256,
+	};
+}
+
+function mergeArtifacts(
+	current: MessageArtifact[] | undefined,
+	updates: MessageArtifact[],
+): MessageArtifact[] {
+	const next = [...(current ?? [])];
+	for (const update of updates) {
+		const index = next.findIndex((artifact) => artifact.id === update.id);
+		if (index === -1) {
+			next.push(update);
+			continue;
+		}
+		next[index] = { ...next[index], ...update };
+	}
+	return next;
+}
+
 function getTodoItems(
 	event: NormalizedSessionEvent,
 	payload: BackendSessionEventPayload,
@@ -316,6 +367,11 @@ function applySessionEventToMessage(
 			if (!todos) return message;
 			return { ...message, todos };
 		}
+		case "artifact.declared": {
+			const artifact = mapArtifactPayload(payload);
+			if (!artifact) return message;
+			return { ...message, artifacts: mergeArtifacts(message.artifacts, [artifact]) };
+		}
 		case "message.delta":
 		case "message.result": {
 			const content = getEventContent(normalizedEvent, payload);
@@ -341,12 +397,18 @@ function applySessionEventToMessage(
 		case "run.completed": {
 			const resultMessage = getRunResultMessage(payload.result);
 			const metadata = metadataFromPayload(payload);
+			const artifacts = payload.artifacts
+				?.map(mapArtifactPayload)
+				.filter((artifact): artifact is MessageArtifact => artifact !== undefined);
 			return {
 				...message,
 				content:
 					options.appendContent && !message.content && resultMessage
 						? resultMessage
 						: message.content,
+				artifacts: artifacts?.length
+					? mergeArtifacts(message.artifacts, artifacts)
+					: message.artifacts,
 				metadata: metadata ? { ...message.metadata, ...metadata } : message.metadata,
 			};
 		}
@@ -464,6 +526,57 @@ export class ChatActionImpl {
 		});
 
 		this.#startSSE(activeSessionId, assistantMsg.id);
+	};
+
+	sendProjectMessage = async (content: string, projectId?: string | null) => {
+		const trimmed = content.trim();
+		if (!trimmed || !projectId) return;
+
+		try {
+			const res = await workApi.newMessage({ content: trimmed, project_id: projectId });
+			const data = res.data.data;
+			if (!data?.project_id || !data?.task_id || !data?.session_id) return;
+
+			const now = Date.now();
+			const userMsg: Message = {
+				id: `msg-user-${now}`,
+				conversationId: data.session_id,
+				role: "user",
+				content: trimmed,
+				timestamp: now,
+			};
+			const assistantMsg: Message = {
+				id: `msg-assistant-${now}`,
+				conversationId: data.session_id,
+				role: "assistant",
+				content: "",
+				timestamp: now + 100,
+			};
+
+			(this.#set as (partial: Record<string, unknown>) => void)({
+				activeProjectId: data.project_id,
+				activeTaskDetailProjectId: data.project_id,
+				activeTaskDetailTaskId: data.task_id,
+				activeTaskDetailSessionId: data.session_id,
+				currentView: "taskDetail",
+				activeProjectTab: "chat",
+				conversationListOpen: false,
+				activeSessionId: data.session_id,
+				messagesMap: {
+					[userMsg.id]: userMsg,
+					[assistantMsg.id]: assistantMsg,
+				},
+				messageIds: [userMsg.id, assistantMsg.id],
+				streamingMessageId: assistantMsg.id,
+				isGenerating: true,
+				inputText: "",
+				inputAttachments: [],
+			});
+
+			this.#startSSE(data.session_id, assistantMsg.id);
+		} catch (err) {
+			console.error("sendProjectMessage error:", err);
+		}
 	};
 
 	#startSSE = (sessionId: string, assistantMsgId: string) => {
@@ -647,12 +760,12 @@ export class ChatActionImpl {
 		}
 	};
 
-	clearMessages = async (sessionId: string) => {
+	clearSessionMessages = async (sessionId: string) => {
 		try {
 			await sessionApi.clearMessages(sessionId);
 			this.#set({ messagesMap: {}, messageIds: [] });
 		} catch (err) {
-			console.error("clearMessages error:", err);
+			console.error("clearSessionMessages error:", err);
 		}
 	};
 }

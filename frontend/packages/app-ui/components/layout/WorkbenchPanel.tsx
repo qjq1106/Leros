@@ -4,8 +4,18 @@ import { useLayoutStore } from "@leros/store";
 import { Button } from "@leros/ui/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@leros/ui/components/ui/popover";
 import { cn } from "@leros/ui/lib/utils";
-import { Bell, Check, ChevronDown, Folder, ListTodo, Plus, Search, SendHorizonal, X } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
+import {
+	Bell,
+	Check,
+	ChevronDown,
+	Folder,
+	ListTodo,
+	Plus,
+	Search,
+	SendHorizonal,
+	X,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 const mockActivities = [
 	{
@@ -29,8 +39,16 @@ const mockActivities = [
 ];
 
 export function WorkbenchPanel() {
-	const { projects, activeProjectId, activeWorkbenchTaskId, selectWorkbenchProject, selectWorkbenchTask, sendWorkbenchMessage, fetchProjects } =
-		useLayoutStore((s) => s);
+	const {
+		projects,
+		activeProjectId,
+		activeWorkbenchTaskId,
+		selectWorkbenchProject,
+		selectWorkbenchTask,
+		sendWorkbenchMessage,
+		fetchProjects,
+		switchProject,
+	} = useLayoutStore((s) => s);
 	const [input, setInput] = useState("");
 	const [projectMenuOpen, setProjectMenuOpen] = useState(false);
 	const [projectSearch, setProjectSearch] = useState("");
@@ -60,9 +78,7 @@ export function WorkbenchPanel() {
 		if (!activeProject) return [];
 		if (!keyword) return activeProject.tasks;
 		return activeProject.tasks.filter(
-			(t) =>
-				t.title.toLowerCase().includes(keyword) ||
-				t.meta.toLowerCase().includes(keyword),
+			(t) => t.title.toLowerCase().includes(keyword) || t.meta.toLowerCase().includes(keyword),
 		);
 	}, [taskSearch, activeProject]);
 
@@ -76,6 +92,13 @@ export function WorkbenchPanel() {
 		selectWorkbenchTask(taskId);
 		setTaskMenuOpen(false);
 		setTaskSearch("");
+	};
+
+	const handleOpenActivityProject = (projectName: string) => {
+		const project = projects.find((item) => item.id === projectName || item.name === projectName);
+		if (project) {
+			switchProject(project.id);
+		}
 	};
 
 	return (
@@ -152,24 +175,16 @@ export function WorkbenchPanel() {
 												{activeProject?.name ?? "新项目"}
 											</span>
 											{activeProject && (
-												<span
-													role="button"
-													tabIndex={0}
+												<button
+													type="button"
 													onClick={(e) => {
 														e.stopPropagation();
 														handleSelectProject(null);
 													}}
-													onKeyDown={(e) => {
-														if (e.key === "Enter" || e.key === " ") {
-															e.preventDefault();
-															e.stopPropagation();
-															handleSelectProject(null);
-														}
-													}}
 													className="shrink-0 rounded-full p-0.5 text-[var(--leros-text-subtle)] hover:bg-[var(--leros-chat-control-bg)] hover:text-[var(--leros-text)]"
 												>
 													<X className="size-3.5" />
-												</span>
+												</button>
 											)}
 											<ChevronDown className="ml-auto size-3.5 shrink-0 text-[var(--leros-text-subtle)]" />
 										</PopoverTrigger>
@@ -233,24 +248,16 @@ export function WorkbenchPanel() {
 													{activeTask?.title ?? "选择任务"}
 												</span>
 												{activeTask && (
-													<span
-														role="button"
-														tabIndex={0}
+													<button
+														type="button"
 														onClick={(e) => {
 															e.stopPropagation();
 															handleSelectTask(null);
 														}}
-														onKeyDown={(e) => {
-															if (e.key === "Enter" || e.key === " ") {
-																e.preventDefault();
-																e.stopPropagation();
-																handleSelectTask(null);
-															}
-														}}
 														className="shrink-0 rounded-full p-0.5 text-[var(--leros-text-subtle)] hover:bg-[var(--leros-chat-control-bg)] hover:text-[var(--leros-text)]"
 													>
 														<X className="size-3.5" />
-													</span>
+													</button>
 												)}
 												<ChevronDown className="ml-auto size-3.5 shrink-0 text-[var(--leros-text-subtle)]" />
 											</PopoverTrigger>
@@ -391,7 +398,7 @@ export function WorkbenchPanel() {
 												<button
 													type="button"
 													className="font-semibold text-[var(--leros-primary)] hover:underline"
-													onClick={() => switchProject(activity.project)}
+													onClick={() => handleOpenActivityProject(activity.project)}
 												>
 													{activity.project}
 												</button>

@@ -10,21 +10,19 @@ declare const process:
 	  }
 	| undefined;
 
-const DEFAULT_API_BASE_URL = "http://192.144.198.60:8080/v1";
+const DEFAULT_API_BASE_URL = "http://localhost:8080/v1";
 
-function getProcessEnv(): PublicEnv | undefined {
+function getNextAPIBaseURL(): string | undefined {
 	if (typeof process === "undefined") return undefined;
-	return process.env;
+	return process.env?.NEXT_PUBLIC_LEROS_API_BASE_URL || process.env?.LEROS_API_BASE_URL;
+}
+
+function getViteAPIBaseURL(): string | undefined {
+	return (import.meta as ImportMeta & { readonly env?: PublicEnv }).env?.VITE_LEROS_API_BASE_URL;
 }
 
 function resolveAPIBaseURL(): string {
-	const viteEnv = (import.meta as ImportMeta & { readonly env?: PublicEnv }).env;
-	const processEnv = getProcessEnv();
-	const baseURL =
-		viteEnv?.VITE_LEROS_API_BASE_URL ||
-		processEnv?.NEXT_PUBLIC_LEROS_API_BASE_URL ||
-		processEnv?.LEROS_API_BASE_URL ||
-		DEFAULT_API_BASE_URL;
+	const baseURL = getViteAPIBaseURL() || getNextAPIBaseURL() || DEFAULT_API_BASE_URL;
 
 	return baseURL.trim().replace(/\/+$/, "");
 }

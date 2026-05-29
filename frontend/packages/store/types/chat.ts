@@ -20,6 +20,20 @@ export type RuntimeTodoItem = {
 	priority?: string;
 };
 
+export type MessageArtifact = {
+	id: string;
+	name: string;
+	title: string;
+	description?: string;
+	type: "document" | "spreadsheet" | "image";
+	artifactType: string;
+	mimeType?: string;
+	size: string;
+	updatedAt: string;
+	downloadUrl: string;
+	sha256?: string;
+};
+
 export type MessageMetadata = {
 	model?: string;
 	tokens?: number;
@@ -34,6 +48,7 @@ export type Message = {
 	timestamp: number;
 	toolCalls?: ToolCall[];
 	todos?: RuntimeTodoItem[];
+	artifacts?: MessageArtifact[];
 	thinking?: string;
 	metadata?: MessageMetadata;
 };

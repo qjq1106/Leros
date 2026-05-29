@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@eigenpal/docx-editor-react/styles.css";
 @import "@leros/ui/styles/tokens.css";
 @import "@leros/ui/styles/base.css";
 
