@@ -42,7 +42,4 @@ linux:
       arch:
         - x64
   artifactName: ${productName}-${version}-linux-${arch}.${ext}
-publish:
-  provider: github
-  releaseType: release
 npmRebuild: false
