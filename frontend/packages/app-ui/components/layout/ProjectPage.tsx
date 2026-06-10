@@ -29,7 +29,7 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
-import { type ChangeEvent, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MessageTimeline } from "../chat/MessageTimeline";
 import { ChatInput, PROJECT_ATTACHMENT_ACCEPT } from "../input/ChatInput";
@@ -590,6 +590,12 @@ function ProjectFiles({
 	const [uploadError, setUploadError] = useState<string | null>(null);
 	const [searchKeyword, setSearchKeyword] = useState("");
 	const [drawerWidth, setDrawerWidth] = useState(FILE_PREVIEW_DRAWER_DEFAULT_WIDTH);
+	const drawerRef = useRef<HTMLDivElement>(null);
+
+	const closePreview = () => {
+		setPreviewFile(null);
+		setPreviewState({ status: "idle" });
+	};
 
 	const filteredFiles = useMemo(() => {
 		const keyword = searchKeyword.trim().toLowerCase();
@@ -652,6 +658,21 @@ function ProjectFiles({
 			}
 		};
 	}, [projectId, previewFile]);
+
+	useEffect(() => {
+		if (!previewFile) return;
+
+		const handlePointerDown = (event: PointerEvent) => {
+			const target = event.target;
+			if (!(target instanceof Element)) return;
+			if (drawerRef.current?.contains(target)) return;
+			if (target.closest("[data-file-preview-trigger]")) return;
+			closePreview();
+		};
+
+		document.addEventListener("pointerdown", handlePointerDown);
+		return () => document.removeEventListener("pointerdown", handlePointerDown);
+	}, [previewFile]);
 
 	const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
@@ -780,6 +801,7 @@ function ProjectFiles({
 								>
 									<button
 										type="button"
+										data-file-preview-trigger
 										onClick={() => setPreviewFile(file)}
 										className="flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-2 py-1 text-left transition-colors hover:bg-[var(--leros-primary-softer)]/50"
 										title="查看"
@@ -831,6 +853,7 @@ function ProjectFiles({
 
 			{previewFile && (
 				<div
+					ref={drawerRef}
 					className="fixed right-0 top-16 z-40 flex h-[calc(100vh-64px)] flex-col overflow-hidden border-l border-[var(--leros-control-border)] bg-[var(--leros-surface)] p-0 shadow-2xl rounded-l-2xl"
 					style={{ width: `${drawerWidth}px`, maxWidth: `${drawerWidth}px` }}
 				>
@@ -865,10 +888,7 @@ function ProjectFiles({
 							</button>
 							<button
 								type="button"
-								onClick={() => {
-									setPreviewFile(null);
-									setPreviewState({ status: "idle" });
-								}}
+								onClick={closePreview}
 								className="rounded-lg p-2 text-[var(--leros-text-muted)] transition-colors hover:bg-[var(--leros-primary-softer)]"
 								title="关闭"
 							>
