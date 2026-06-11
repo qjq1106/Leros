@@ -45,7 +45,6 @@ func (s *skillMarketplaceService) SearchSkillMarketplace(ctx context.Context, re
 
 	keyword := strings.TrimSpace(req.Keyword)
 	var externalQuery string
-	var skipExternal bool
 
 	if keyword == "" {
 		if req.Category != "" {
@@ -53,8 +52,6 @@ func (s *skillMarketplaceService) SearchSkillMarketplace(ctx context.Context, re
 		} else {
 			externalQuery = "office"
 		}
-	} else if len([]rune(keyword)) < 2 {
-		skipExternal = true
 	} else {
 		externalQuery = keyword
 	}
@@ -86,7 +83,7 @@ func (s *skillMarketplaceService) SearchSkillMarketplace(ctx context.Context, re
 	}
 
 	// 外部源（skills.sh）
-	if queryExternal && !skipExternal {
+	if queryExternal {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
