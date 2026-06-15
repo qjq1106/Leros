@@ -390,7 +390,6 @@ func (p *MessagePoster) publishWorkerTask(ctx context.Context, session *types.Se
 			"session_id":   session.PublicID,
 			"message_type": message.MessageType,
 			"sequence":     message.Sequence,
-			"timestamp":    message.Timestamp,
 		},
 	}
 

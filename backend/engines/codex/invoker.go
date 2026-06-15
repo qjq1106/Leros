@@ -19,26 +19,22 @@ import (
 type AppServerInvoker struct {
 	binary  string
 	baseEnv []string
-	pool    *AppServerPool
 }
 
 func NewAppServerInvoker(binary string, extraEnv map[string]string) *AppServerInvoker {
 	return &AppServerInvoker{
 		binary:  binary,
 		baseEnv: engines.BuildBaseEnv(extraEnv),
-		pool:    NewAppServerPool(binary, engines.BuildBaseEnv(extraEnv)),
 	}
 }
 
 func (inv *AppServerInvoker) Run(ctx context.Context, req engines.RunRequest) (*engines.RunHandle, error) {
 	workDir := strings.TrimSpace(req.WorkDir)
 
-	srv, err := inv.pool.GetOrCreate(ctx, workDir, req.SessionID, req.Model)
+	srv, err := startAppServer(ctx, inv.binary, workDir, inv.baseEnv, req.Model, req.MCPServers, req.TaskDir)
 	if err != nil {
-		return nil, fmt.Errorf("get app-server for %s: %w", workDir, err)
+		return nil, fmt.Errorf("start app-server for %s: %w", workDir, err)
 	}
-
-	srv.Lock()
 
 	evtChan := make(chan events.Event, 64)
 	srv.SetEventChannel(evtChan)
@@ -55,7 +51,7 @@ func (inv *AppServerInvoker) Run(ctx context.Context, req engines.RunRequest) (*
 	// -- 会话管理 --
 	threadID, err := st.ensureThread(ctx, req)
 	if err != nil {
-		srv.Unlock()
+		_ = srv.Close()
 		close(evtChan)
 		return nil, err
 	}
@@ -63,7 +59,7 @@ func (inv *AppServerInvoker) Run(ctx context.Context, req engines.RunRequest) (*
 	// -- 开始 turn --
 	tid, err := srv.StartTurn(ctx, threadID, req.Prompt)
 	if err != nil {
-		srv.Unlock()
+		_ = srv.Close()
 		close(evtChan)
 		return nil, fmt.Errorf("start turn: %w", err)
 	}
@@ -78,7 +74,6 @@ func (inv *AppServerInvoker) Run(ctx context.Context, req engines.RunRequest) (*
 }
 
 func (st *runState) buildHandle(req engines.RunRequest) (*engines.RunHandle, error) {
-	// app-server 始终以 on-request 模式运行，始终创建 Responder
 	responder := &appServerResponder{srv: st.srv}
 	return &engines.RunHandle{
 		Process:   st.srv,
@@ -433,13 +428,13 @@ func (st *runState) ensureThread(ctx context.Context, req engines.RunRequest) (s
 }
 
 func (st *runState) waitTurnDone(ctx context.Context) {
-	defer st.srv.Unlock()
 	defer close(st.evtChan)
 	defer func() {
 		st.srv.onNotification = nil
 		st.srv.onServerRequest = nil
 		st.srv.SetEventChannel(nil)
 		st.srv.SetPendingApproval(nil)
+		_ = st.srv.Close()
 	}()
 
 	select {
@@ -470,7 +465,6 @@ type appServerResponder struct {
 }
 
 func (r *appServerResponder) WriteDecision(requestID string, action string) error {
-	// Codex app-server: approve→accept, deny→cancel
 	decision := "cancel"
 	if action == engines.ApprovalActionApprove || action == engines.ApprovalActionAlways {
 		decision = "accept"

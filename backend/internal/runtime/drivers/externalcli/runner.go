@@ -13,6 +13,7 @@ import (
 	"github.com/insmtx/Leros/backend/internal/agent"
 	"github.com/insmtx/Leros/backend/internal/runtime/events"
 	runtimetodo "github.com/insmtx/Leros/backend/internal/runtime/todo"
+	agentworkspace "github.com/insmtx/Leros/backend/internal/workspace"
 	"github.com/ygpkg/yg-go/logs"
 )
 
@@ -22,6 +23,7 @@ type Runner struct {
 	engine          engines.Engine
 	sessionStore    ProviderSessionStore
 	approvalHandler engines.ApprovalHandler
+	mcpServers      []engines.MCPServerConfig
 }
 
 // NewRunner 创建外部 CLI 运行器。
@@ -56,6 +58,14 @@ func (r *Runner) SetApprovalHandler(handler engines.ApprovalHandler) {
 	r.approvalHandler = handler
 }
 
+// SetMCPServers 设置 MCP 服务配置，用于后续 Run() 时传入引擎。
+func (r *Runner) SetMCPServers(cfgs []engines.MCPServerConfig) {
+	if r == nil {
+		return
+	}
+	r.mcpServers = cfgs
+}
+
 // Run 通过外部 CLI 引擎执行标准化请求。
 func (r *Runner) Run(ctx context.Context, req *agent.RequestContext) (*agent.RunResult, error) {
 	startedAt := time.Now().UTC()
@@ -81,17 +91,24 @@ func (r *Runner) Run(ctx context.Context, req *agent.RequestContext) (*agent.Run
 	}
 	sessionPlan := r.resolveProviderSession(ctx, req, workDir)
 
+	taskDir := ""
+	if plan, ok, err := agentworkspace.FromAgentRequest(req); err == nil && ok {
+		taskDir = plan.TaskDir
+	}
+
 	handle, err := r.engine.Run(ctx, engines.RunRequest{
 		ExecutionID:     req.RunID,
 		SessionID:       sessionPlan.ProviderSessionID,
 		Resume:          sessionPlan.Resume,
 		WorkDir:         workDir,
+		TaskDir:         taskDir,
 		SystemPrompt:    strings.TrimSpace(req.SystemPrompt),
 		Prompt:          prompt,
 		Model:           modelForRequest(req),
 		ExtraEnv:        nil,
 		PermissionMode:  engines.PermissionMode(req.Policy.PermissionMode),
 		ApprovalHandler: r.approvalHandler,
+		MCPServers:      r.mcpServers,
 	})
 	if err != nil {
 		return r.failedResult(req, startedAt, err, failureMetadata(workDir)), err

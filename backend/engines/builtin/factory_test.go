@@ -5,7 +5,7 @@ import (
 
 	"github.com/insmtx/Leros/backend/config"
 	"github.com/insmtx/Leros/backend/engines"
-	"github.com/insmtx/Leros/backend/internal/runtime/deps"
+	"github.com/insmtx/Leros/backend/tools"
 )
 
 func TestNewRegistryFromConfigDetectsInstalledEngines(t *testing.T) {
@@ -13,10 +13,7 @@ func TestNewRegistryFromConfigDetectsInstalledEngines(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEROS_WORKSPACE_ROOT", tmpDir)
 
-	env, err := deps.New(t.Context(), deps.Options{})
-	if err != nil {
-		t.Fatalf("create deps container: %v", err)
-	}
+	env := tools.NewRegistry()
 	registry, err := NewRegistryFromConfig(&config.CLIEnginesConfig{}, env)
 	if err != nil {
 		t.Fatalf("build registry: %v", err)

@@ -5,10 +5,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/insmtx/Leros/backend/engines"
@@ -16,30 +17,23 @@ import (
 	"github.com/ygpkg/yg-go/logs"
 )
 
-const (
-	appServerIdleTimeout = 2 * time.Minute
-	appServerGCInterval  = 1 * time.Minute
-)
-
-// AppServer 管理一个持久化的 codex app-server 进程。
+// AppServer 管理一个 codex app-server 进程。
 type AppServer struct {
 	binary  string
 	workDir string
 
 	cmd     *exec.Cmd
-	scanner *bufio.Scanner // stdout 行扫描器（整个生命周期共享）
+	scanner *bufio.Scanner // stdout 行扫描器
 	stdin   io.WriteCloser
 
-	writeMu    sync.Mutex
-	nextRPCID  int64
-	mu         sync.Mutex
-	pending    map[int64]chan *rpcResponse
-	threadID   string
-	turnID     string
-	busy       bool
-	lastActive time.Time
-	closed     bool
-	done       chan struct{}
+	writeMu   sync.Mutex
+	nextRPCID int64
+	mu        sync.Mutex
+	pending   map[int64]chan *rpcResponse
+	threadID  string
+	turnID    string
+	closed    bool
+	done      chan struct{}
 
 	pendingApproval *ServerRequest
 	onNotification  func(method string, params sonic.NoCopyRawMessage)
@@ -47,125 +41,22 @@ type AppServer struct {
 	evtChan         chan<- events.Event
 }
 
-// AppServerPool 以 workDir+baseURL 为 key 管理 app-server 进程池。
-type AppServerPool struct {
-	mu      sync.Mutex
-	servers map[string]*AppServer
-	binary  string
-	baseEnv []string
-	ctx     context.Context
-	cancel  context.CancelFunc
-}
-
-func NewAppServerPool(binary string, baseEnv []string) *AppServerPool {
-	ctx, cancel := context.WithCancel(context.Background())
-	pool := &AppServerPool{
-		servers: make(map[string]*AppServer),
-		binary:  binary,
-		baseEnv: baseEnv,
-		ctx:     ctx,
-		cancel:  cancel,
-	}
-	go pool.gcLoop()
-	return pool
-}
-
-func poolKey(workDir, sessionID string) string {
-	return workDir + "|" + strings.TrimSpace(sessionID)
-}
-
-func (p *AppServerPool) GetOrCreate(ctx context.Context, workDir string, sessionID string, modelCfg engines.ModelConfig) (*AppServer, error) {
-	key := poolKey(workDir, sessionID)
-	p.mu.Lock()
-	if srv, ok := p.servers[key]; ok && !srv.isClosed() {
-		p.mu.Unlock()
-		return srv, nil
-	}
-	if srv, ok := p.servers[key]; ok {
-		delete(p.servers, key)
-		_ = srv.Close()
-	}
-	p.mu.Unlock()
-
-	srv, err := startAppServer(ctx, p.binary, workDir, p.baseEnv, modelCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	p.mu.Lock()
-	if existing, ok := p.servers[key]; ok && !existing.isClosed() {
-		p.mu.Unlock()
-		_ = srv.Close()
-		return existing, nil
-	}
-	p.servers[key] = srv
-	p.mu.Unlock()
-	return srv, nil
-}
-
-func (p *AppServerPool) Shutdown() {
-	p.cancel()
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for key, srv := range p.servers {
-		_ = srv.Close()
-		delete(p.servers, key)
-	}
-}
-
-func (p *AppServerPool) gcLoop() {
-	ticker := time.NewTicker(appServerGCInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-p.ctx.Done():
-			return
-		case <-ticker.C:
-			p.collect()
-		}
-	}
-}
-
-func (p *AppServerPool) collect() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for key, srv := range p.servers {
-		if srv.isClosed() {
-			delete(p.servers, key)
-			continue
-		}
-		srv.mu.Lock()
-		idle := !srv.busy && time.Since(srv.lastActive) > appServerIdleTimeout
-		srv.mu.Unlock()
-		if idle {
-			logs.Infof("AppServer idle timeout, closing: key=%s", key)
-			_ = srv.Close()
-			delete(p.servers, key)
-		}
-	}
-}
-
 // ============================================================================
 // 进程启动
 // ============================================================================
 
-func startAppServer(ctx context.Context, binary, workDir string, baseEnv []string, modelCfg engines.ModelConfig) (*AppServer, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(modelCfg.BaseURL), "/")
-	if baseURL != "" && !strings.HasSuffix(baseURL, "/v1") {
-		baseURL += "/v1"
+func startAppServer(ctx context.Context, binary, workDir string, baseEnv []string, modelCfg engines.ModelConfig, mcpServers []engines.MCPServerConfig, taskDir string) (*AppServer, error) {
+	codexHome := filepath.Join(taskDir, ".codex")
+	if err := os.MkdirAll(codexHome, 0o755); err != nil {
+		return nil, fmt.Errorf("create codex-home dir: %w", err)
+	}
+	if err := writeCodexConfigToml(codexHome, modelCfg, mcpServers); err != nil {
+		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, binary, "app-server", "--listen", "stdio://",
-		"-c", "sandbox_mode=danger-full-access",
-		"-c", `model_provider="leros"`,
-		"-c", `model_providers.leros.name="leros"`,
-		"-c", fmt.Sprintf(`model_providers.leros.base_url=%q`, baseURL),
-		"-c", `model_providers.leros.env_key="OPENAI_API_KEY"`,
-		"-c", `model_providers.leros.wire_api="responses"`,
-		"-c", `model_providers.leros.requires_openai_auth=false`,
-	)
+	cmd := exec.CommandContext(ctx, binary, "app-server", "--listen", "stdio://")
 	cmd.Dir = workDir
-	cmd.Env = buildAppServerEnv(baseEnv, modelCfg)
+	cmd.Env = buildAppServerEnv(baseEnv, modelCfg, mcpServers, codexHome)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -187,7 +78,7 @@ func startAppServer(ctx context.Context, binary, workDir string, baseEnv []strin
 		return nil, fmt.Errorf("start codex app-server: %w", err)
 	}
 
-	logs.Infof("Codex app-server started: pid=%d workDir=%s binary=%s", cmd.Process.Pid, workDir, binary)
+	logs.Infof("Codex app-server started: pid=%d workDir=%s codexHome=%s", cmd.Process.Pid, workDir, codexHome)
 
 	// stderr reader
 	go func() {
@@ -201,7 +92,7 @@ func startAppServer(ctx context.Context, binary, workDir string, baseEnv []strin
 		}
 	}()
 
-	// stdout scanner — 整个生命周期共享
+	// stdout scanner
 	initScanner := bufio.NewScanner(stdout)
 	initScanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 
@@ -232,17 +123,16 @@ func startAppServer(ctx context.Context, binary, workDir string, baseEnv []strin
 	}
 
 	srv := &AppServer{
-		binary:     binary,
-		workDir:    workDir,
-		cmd:        cmd,
-		scanner:    initScanner,
-		stdin:      stdin,
-		pending:    make(map[int64]chan *rpcResponse),
-		lastActive: time.Now(),
-		done:       make(chan struct{}),
+		binary:  binary,
+		workDir: workDir,
+		cmd:     cmd,
+		scanner: initScanner,
+		stdin:   stdin,
+		pending: make(map[int64]chan *rpcResponse),
+		done:    make(chan struct{}),
 	}
 
-	// ReadLoop goroutine — 共享 scanner 持续读取 stdout
+	// ReadLoop goroutine
 	go func() {
 		srv.readLoop(ctx)
 		srv.markClosed()
@@ -255,21 +145,6 @@ func startAppServer(ctx context.Context, binary, workDir string, baseEnv []strin
 // ============================================================================
 // 生命周期方法
 // ============================================================================
-
-func (s *AppServer) Lock() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.busy = true
-	s.lastActive = time.Now()
-}
-
-func (s *AppServer) Unlock() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.busy = false
-	s.lastActive = time.Now()
-	s.turnID = ""
-}
 
 func (s *AppServer) ThreadID() string {
 	s.mu.Lock()
@@ -362,17 +237,112 @@ func (s *AppServer) RespondApproval(ctx context.Context, reqID sonic.NoCopyRawMe
 }
 
 // ============================================================================
+// config.toml 生成
+// ============================================================================
+
+func writeCodexConfigToml(codexHome string, modelCfg engines.ModelConfig, mcpServers []engines.MCPServerConfig) error {
+	baseURL := strings.TrimRight(strings.TrimSpace(modelCfg.BaseURL), "/")
+	if baseURL != "" && !strings.HasSuffix(baseURL, "/v1") {
+		baseURL += "/v1"
+	}
+
+	var b strings.Builder
+	b.WriteString("sandbox_mode = \"danger-full-access\"\n")
+	b.WriteString("\n")
+	b.WriteString("# BEGIN leros-managed memory-feature (do not edit; regenerated by daemon)\n")
+	b.WriteString("features.memories = false\n")
+	b.WriteString("# END leros-managed memory-feature\n")
+	b.WriteString("\n")
+	b.WriteString("# BEGIN leros-managed memory-config (do not edit; regenerated by daemon)\n")
+	b.WriteString("memories.generate_memories = false\n")
+	b.WriteString("memories.use_memories = false\n")
+	b.WriteString("# END leros-managed memory-config\n")
+	b.WriteString("\n")
+	b.WriteString("# BEGIN leros-managed multi-agent (do not edit; regenerated by daemon)\n")
+	b.WriteString("features.multi_agent = false\n")
+	b.WriteString("# END leros-managed multi-agent\n")
+	b.WriteString("\n")
+	b.WriteString("model_provider = \"leros\"\n\n")
+	b.WriteString("[model_providers.leros]\n")
+	b.WriteString("name = \"leros\"\n")
+	b.WriteString(fmt.Sprintf("base_url = %q\n", baseURL))
+	b.WriteString("env_key = \"OPENAI_API_KEY\"\n")
+	b.WriteString("wire_api = \"responses\"\n")
+	b.WriteString("requires_openai_auth = false\n")
+
+	tokenEnvVar := engines.LerosMCPTokenEnvVar()
+	for _, m := range mcpServers {
+		if m.Name == "" {
+			continue
+		}
+		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("[mcp_servers.%s]\n", m.Name))
+		if m.Command != "" {
+			// Stdio 传输
+			b.WriteString(fmt.Sprintf("command = %q\n", m.Command))
+			if len(m.Args) > 0 {
+				b.WriteString("args = [")
+				for i, arg := range m.Args {
+					if i > 0 {
+						b.WriteString(", ")
+					}
+					b.WriteString(fmt.Sprintf("%q", arg))
+				}
+				b.WriteString("]\n")
+			}
+			if len(m.Env) > 0 {
+				b.WriteString(fmt.Sprintf("[mcp_servers.%s.env]\n", m.Name))
+				for k, v := range m.Env {
+					b.WriteString(fmt.Sprintf("%s = %q\n", k, v))
+				}
+			}
+		} else if m.URL != "" {
+			// HTTP 传输，通过 npx mcp-remote 转为 stdio
+			b.WriteString("command = \"npx\"\n")
+			args := []string{"-y", "mcp-remote", m.URL}
+			if m.BearerToken != "" {
+				args = append(args, "--header", fmt.Sprintf("Authorization: Bearer ${%s}", tokenEnvVar))
+			}
+			b.WriteString("args = [")
+			for i, arg := range args {
+				if i > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString(fmt.Sprintf("%q", arg))
+			}
+			b.WriteString("]\n")
+		}
+	}
+
+	configPath := filepath.Join(codexHome, "config.toml")
+	if err := os.WriteFile(configPath, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("write config.toml: %w", err)
+	}
+	logs.Infof("Codex config.toml written: %s", configPath)
+	return nil
+}
+
+// ============================================================================
 // 环境变量
 // ============================================================================
 
-func buildAppServerEnv(baseEnv []string, modelCfg engines.ModelConfig) []string {
+func buildAppServerEnv(baseEnv []string, modelCfg engines.ModelConfig, mcpServers []engines.MCPServerConfig, codexHome string) []string {
 	env := engines.BuildBaseEnv(nil)
 	env = append(env, "CODEX_QUIET_MODE=1")
+	env = append(env, "CODEX_HOME="+codexHome)
 	modelEnv := appServerModelEnv(modelCfg)
 	for k, v := range modelEnv {
 		env = append(env, k+"="+v)
 	}
-	logs.Infof("Codex app-server env: OPENAI_API_KEY=%s OPENAI_API_BASE=%s OPENAI_BASE_URL=%s",
+	tokenEnvVar := engines.LerosMCPTokenEnvVar()
+	for _, m := range mcpServers {
+		if m.BearerToken != "" {
+			env = append(env, tokenEnvVar+"="+m.BearerToken)
+			break
+		}
+	}
+	logs.Infof("Codex app-server env: CODEX_HOME=%s OPENAI_API_KEY=%s OPENAI_API_BASE=%s OPENAI_BASE_URL=%s",
+		codexHome,
 		maskKey(modelEnv["OPENAI_API_KEY"]),
 		modelEnv["OPENAI_API_BASE"],
 		modelEnv["OPENAI_BASE_URL"],

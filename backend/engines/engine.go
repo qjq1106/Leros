@@ -90,12 +90,14 @@ type RunRequest struct {
 	SessionID       string
 	Resume          bool
 	WorkDir         string
+	TaskDir         string            // task 目录（跨 turn 持久化），引擎可在此写入配置文件
 	SystemPrompt    string
 	Prompt          string
 	Model           ModelConfig
 	ExtraEnv        []string
-	PermissionMode  PermissionMode  // 控制审批行为
-	ApprovalHandler ApprovalHandler // 可选：由运行时注入，用于 on-request/auto 模式
+	PermissionMode  PermissionMode     // 控制审批行为
+	ApprovalHandler ApprovalHandler    // 可选：由运行时注入，用于 on-request/auto 模式
+	MCPServers      []MCPServerConfig  // MCP 服务配置，用于引擎启动时注入
 }
 
 // Process 是正在运行的外部 CLI 进程句柄。
@@ -114,7 +116,6 @@ type RunHandle struct {
 // Engine 通过外部 AI CLI 执行提示。
 type Engine interface {
 	Prepare(ctx context.Context, req PrepareRequest) error
-	RegisterMCP(ctx context.Context, cfg MCPServerConfig) error
 	GetSkillDir() string
 	Run(ctx context.Context, req RunRequest) (*RunHandle, error)
 }

@@ -343,6 +343,64 @@ func TestOpenAIChatEncodeRequest(t *testing.T) {
 		}
 	})
 
+	t.Run("encode_merges_consecutive_assistant_tool_calls", func(t *testing.T) {
+		ir := &IRRequest{
+			Model: "gpt-4o",
+			Messages: []IRMessage{
+				{Role: IRRoleUser, Parts: []IRContentPart{{Type: IRPartText, Text: "available mcp"}}},
+				{
+					Role: IRRoleAssistant,
+					Parts: []IRContentPart{
+						{Type: IRPartToolCall, ToolCall: &IRToolCallPart{ID: "call_config", Name: "exec_command", ArgumentsJSON: map[string]interface{}{"cmd": "cat ~/.codex/config.json"}}},
+					},
+				},
+				{
+					Role: IRRoleAssistant,
+					Parts: []IRContentPart{
+						{Type: IRPartToolCall, ToolCall: &IRToolCallPart{ID: "call_resources", Name: "list_mcp_resources", ArgumentsJSON: map[string]interface{}{}}},
+					},
+				},
+				{
+					Role: IRRoleTool,
+					Parts: []IRContentPart{
+						{Type: IRPartToolResult, ToolResult: &IRToolResultPart{ToolCallID: "call_config", Content: []IRContentPart{{Type: IRPartText, Text: "No config"}}}},
+					},
+				},
+				{
+					Role: IRRoleTool,
+					Parts: []IRContentPart{
+						{Type: IRPartToolResult, ToolResult: &IRToolResultPart{ToolCallID: "call_resources", Content: []IRContentPart{{Type: IRPartText, Text: "{\"resources\":[]}"}}}},
+					},
+				},
+			},
+		}
+
+		body, err := testAdapter.EncodeRequest(ir)
+		if err != nil {
+			t.Fatalf("EncodeRequest() error = %v", err)
+		}
+		msgs, _ := getList(body, "messages")
+		if len(msgs) != 4 {
+			t.Fatalf("len(messages) = %d, want 4", len(msgs))
+		}
+		asst, _ := msgs[1].(map[string]interface{})
+		tcs, ok := getList(asst, "tool_calls")
+		if !ok || len(tcs) != 2 {
+			t.Fatalf("tool_calls = %v, want 2 calls", asst["tool_calls"])
+		}
+		if getString(asst, "role") != "assistant" {
+			t.Errorf("assistant role = %q", getString(asst, "role"))
+		}
+		firstTool, _ := msgs[2].(map[string]interface{})
+		secondTool, _ := msgs[3].(map[string]interface{})
+		if getString(firstTool, "tool_call_id") != "call_config" {
+			t.Errorf("first tool_call_id = %q", getString(firstTool, "tool_call_id"))
+		}
+		if getString(secondTool, "tool_call_id") != "call_resources" {
+			t.Errorf("second tool_call_id = %q", getString(secondTool, "tool_call_id"))
+		}
+	})
+
 	t.Run("tool_choice_specific", func(t *testing.T) {
 		ir := &IRRequest{
 			Model:      "gpt-4o",

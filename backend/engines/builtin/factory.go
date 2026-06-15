@@ -9,12 +9,12 @@ import (
 	"github.com/insmtx/Leros/backend/engines/claude"
 	"github.com/insmtx/Leros/backend/engines/codex"
 	"github.com/insmtx/Leros/backend/engines/native"
-	"github.com/insmtx/Leros/backend/internal/runtime/deps"
+	"github.com/insmtx/Leros/backend/tools"
 )
 
 // NewRegistryFromConfig creates a registry with the native engine and every
 // detected built-in CLI engine.
-func NewRegistryFromConfig(cfg *config.CLIEnginesConfig, env *deps.Container) (*engines.Registry, error) {
+func NewRegistryFromConfig(cfg *config.CLIEnginesConfig, env *tools.Registry) (*engines.Registry, error) {
 	registry := engines.NewRegistry()
 
 	// Always register the native in-process engine.

@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/insmtx/Leros/backend/engines"
-	"github.com/insmtx/Leros/backend/internal/runtime/deps"
 	"github.com/insmtx/Leros/backend/pkg/leros"
+	"github.com/insmtx/Leros/backend/tools"
 )
 
 // EngineName is the registry name for the native engine.
@@ -18,14 +18,14 @@ const EngineName = engines.EngineNative
 // Adapter implements engines.Engine for the in-process Eino runtime.
 type Adapter struct {
 	runner *Runner
-	env    *deps.Container
+	env    *tools.Registry
 
 	mu       sync.RWMutex
 	skillDir string
 }
 
 // NewAdapter creates a native engine adapter.
-func NewAdapter(env *deps.Container) (*Adapter, error) {
+func NewAdapter(env *tools.Registry) (*Adapter, error) {
 	runner, err := NewRunner(context.Background(), env)
 	if err != nil {
 		return nil, fmt.Errorf("create native runner: %w", err)
@@ -45,11 +45,6 @@ func NewAdapter(env *deps.Container) (*Adapter, error) {
 
 // Prepare satisfies engines.Engine.
 func (a *Adapter) Prepare(_ context.Context, _ engines.PrepareRequest) error {
-	return nil
-}
-
-// RegisterMCP satisfies engines.Engine.
-func (a *Adapter) RegisterMCP(_ context.Context, _ engines.MCPServerConfig) error {
 	return nil
 }
 

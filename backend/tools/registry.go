@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/ygpkg/yg-go/logs"
@@ -57,6 +58,29 @@ func (r *Registry) Get(name string) (Tool, error) {
 	}
 
 	return tool, nil
+}
+
+// AvailableToolNames filters the given names to those registered.
+func (r *Registry) AvailableToolNames(names []string) []string {
+	if r == nil || len(names) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(names))
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		if _, err := r.Get(name); err == nil {
+			result = append(result, name)
+			seen[name] = struct{}{}
+		}
+	}
+	return result
 }
 
 // List returns all registered tools sorted by tool name.

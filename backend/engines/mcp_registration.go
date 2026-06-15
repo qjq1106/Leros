@@ -15,8 +15,11 @@ const lerosMCPTokenEnvVar = "LEROS_MCP_TOKEN"
 // MCPServerConfig describes the Leros MCP endpoint registered with an external CLI client.
 type MCPServerConfig struct {
 	Name        string
-	URL         string
-	BearerToken string
+	URL         string            // HTTP 传输
+	BearerToken string            // HTTP 传输：bearer token
+	Command     string            // Stdio 传输：可执行文件路径
+	Args        []string          // Stdio 传输：命令参数
+	Env         map[string]string // Stdio 传输：进程额外环境变量
 }
 
 // NormalizeMCPServerConfig fills defaults for an MCP server registration.
@@ -27,6 +30,7 @@ func NormalizeMCPServerConfig(cfg MCPServerConfig) MCPServerConfig {
 	}
 	cfg.URL = strings.TrimSpace(cfg.URL)
 	cfg.BearerToken = strings.TrimSpace(cfg.BearerToken)
+	cfg.Command = strings.TrimSpace(cfg.Command)
 	return cfg
 }
 

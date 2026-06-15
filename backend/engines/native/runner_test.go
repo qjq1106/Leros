@@ -12,7 +12,6 @@ import (
 
 	einotool "github.com/cloudwego/eino/components/tool"
 	"github.com/insmtx/Leros/backend/engines"
-	"github.com/insmtx/Leros/backend/internal/runtime/deps"
 	"github.com/insmtx/Leros/backend/internal/runtime/events"
 	runtimetodo "github.com/insmtx/Leros/backend/internal/runtime/todo"
 	skillcatalog "github.com/insmtx/Leros/backend/internal/skill/catalog"
@@ -169,10 +168,7 @@ func TestAgentRunRealModel(t *testing.T) {
 	ctx, cancel := realModelTestContext(t)
 	defer cancel()
 
-	runtimeDeps, err := deps.New(ctx, deps.Options{})
-	if err != nil {
-		t.Fatalf("new runtime env: %v", err)
-	}
+	runtimeDeps := tools.NewRegistry()
 
 	agt, err := NewRunner(ctx, runtimeDeps)
 	if err != nil {
@@ -211,12 +207,7 @@ func TestAgentRunNodeTool(t *testing.T) {
 		t.Fatalf("register node tools: %v", err)
 	}
 
-	runtimeDeps, err := deps.New(ctx, deps.Options{})
-	if err != nil {
-		t.Fatalf("new runtime env: %v", err)
-	}
-
-	agt, err := NewRunner(ctx, runtimeDeps)
+	agt, err := NewRunner(ctx, registry)
 	if err != nil {
 		t.Fatalf("new agent: %v", err)
 	}
@@ -264,12 +255,7 @@ func TestAgentRunWeatherSkillQuery(t *testing.T) {
 		t.Fatalf("register node tools: %v", err)
 	}
 
-	runtimeDeps, err := deps.New(ctx, deps.Options{})
-	if err != nil {
-		t.Fatalf("new runtime env: %v", err)
-	}
-
-	agt, err := NewRunner(ctx, runtimeDeps)
+	agt, err := NewRunner(ctx, registry)
 	if err != nil {
 		t.Fatalf("new agent: %v", err)
 	}

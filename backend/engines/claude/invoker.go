@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -39,6 +40,18 @@ func (inv *Invoker) Run(ctx context.Context, req engines.RunRequest) (*engines.R
 			settingsPath = sp
 		} else {
 			logs.WarnContextf(ctx, "write leros settings failed: %v", err)
+		}
+	}
+
+	// 写入 mcp_config.json 到 taskDir/.claude/，通过 --mcp-config 注入 MCP 服务
+	var mcpConfigPath string
+	if len(req.MCPServers) > 0 && req.TaskDir != "" {
+		mcpDir := filepath.Join(req.TaskDir, ".claude")
+		if path, err := writeMCPConfig(mcpDir, req.MCPServers); err == nil {
+			args = append(args, "--mcp-config", path)
+			mcpConfigPath = path
+		} else {
+			logs.WarnContextf(ctx, "write claude mcp config failed: %v", err)
 		}
 	}
 
@@ -85,9 +98,12 @@ func (inv *Invoker) Run(ctx context.Context, req engines.RunRequest) (*engines.R
 		closeStdinOnce := &sync.Once{}
 		closeStdin := func() { closeStdinOnce.Do(func() { stdinPipe.Close() }) }
 		defer closeStdin()
-		// 清理 settings 文件
+		// 清理临时配置文件
 		if settingsPath != "" {
 			defer func() { _ = os.Remove(settingsPath) }()
+		}
+		if mcpConfigPath != "" {
+			defer func() { _ = os.Remove(mcpConfigPath) }()
 		}
 
 		// 写入初始用户消息

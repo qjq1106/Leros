@@ -263,14 +263,31 @@ func messageMetadataFromRunCompleted(completed *events.RunCompletedPayload) *typ
 		return nil
 	}
 
-	// 鐩存帴搴忓垪鍖栦负 MessageMetadata锛屼笉鍖归厤鐨勫瓧娈典細琚拷鐣?
 	data, err := json.Marshal(src)
 	if err != nil {
 		return nil
 	}
+
 	msgMetadata := &types.ObjectMetadata{}
 	if err := json.Unmarshal(data, msgMetadata); err != nil {
 		return nil
+	}
+
+	var flat map[string]any
+	if err := json.Unmarshal(data, &flat); err != nil {
+		return nil
+	}
+
+	knownKeys := map[string]bool{"tags": true, "type": true, "bucket": true, "key": true}
+	extra := make(map[string]any, len(flat))
+	for k, v := range flat {
+		if knownKeys[k] {
+			continue
+		}
+		extra[k] = v
+	}
+	if len(extra) > 0 {
+		msgMetadata.Extra = extra
 	}
 	return msgMetadata
 }

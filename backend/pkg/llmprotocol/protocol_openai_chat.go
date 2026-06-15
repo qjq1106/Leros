@@ -170,17 +170,14 @@ func (a *openAIChatAdapter) encodeRequestBody(ir *IRRequest) map[string]interfac
 	if ir.Seed != nil {
 		body["seed"] = *ir.Seed
 	}
-	if ir.ParallelToolCalls != nil {
-		body["parallel_tool_calls"] = *ir.ParallelToolCalls
+	if ir.ParallelToolCalls != nil && *ir.ParallelToolCalls {
+		body["parallel_tool_calls"] = true
 	}
 	if len(ir.StreamOptions) > 0 {
 		body["stream_options"] = ir.StreamOptions
 	}
 	if len(ir.Metadata) > 0 {
 		body["metadata"] = ir.Metadata
-	}
-	if ir.Store != nil {
-		body["store"] = *ir.Store
 	}
 	if ir.User != "" {
 		body["user"] = ir.User
@@ -296,7 +293,7 @@ func (a *openAIChatAdapter) EncodeResponse(ir *IRResponse) (map[string]interface
 			// reasoning content typically not sent in chat completions response body
 		case IRPartToolCall:
 			if part.ToolCall != nil {
-					args := serializeChatToolCallArgs(part.ToolCall)
+				args := serializeChatToolCallArgs(part.ToolCall)
 				toolCalls = append(toolCalls, map[string]interface{}{
 					"id":   part.ToolCall.ID,
 					"type": "function",
@@ -781,7 +778,7 @@ func encodeOpenAIChatMessages(ir *IRRequest) []interface{} {
 		})
 	}
 
-	for _, m := range ir.Messages {
+	for _, m := range normalizeOpenAIChatMessageSequence(ir.Messages) {
 		if m.Role == IRRoleSystem {
 			continue // already emitted as system message above
 		}
@@ -802,13 +799,6 @@ func encodeOpenAIChatMessages(ir *IRRequest) []interface{} {
 		flushMessage := func() {
 			if len(toolCalls) > 0 {
 				em["tool_calls"] = toolCalls
-				if _, ok := em["content"]; !ok {
-					em["content"] = nil
-				}
-				// DeepSeek requires reasoning_content on every assistant tool-call message.
-				if reasoningContent == "" {
-					reasoningContent = " "
-				}
 			}
 			if reasoningContent != "" {
 				em["reasoning_content"] = reasoningContent
@@ -879,6 +869,52 @@ func encodeOpenAIChatMessages(ir *IRRequest) []interface{} {
 	}
 
 	return msgs
+}
+
+func normalizeOpenAIChatMessageSequence(messages []IRMessage) []IRMessage {
+	var normalized []IRMessage
+	for _, msg := range messages {
+		if canMergeAssistantToolCallMessage(msg) && len(normalized) > 0 {
+			lastIdx := len(normalized) - 1
+			if hasToolCallPart(normalized[lastIdx]) && normalized[lastIdx].Role == IRRoleAssistant {
+				normalized[lastIdx].Parts = append(normalized[lastIdx].Parts, msg.Parts...)
+				continue
+			}
+		}
+		normalized = append(normalized, msg)
+	}
+	return normalized
+}
+
+func canMergeAssistantToolCallMessage(msg IRMessage) bool {
+	if msg.Role != IRRoleAssistant {
+		return false
+	}
+	hasToolCall := false
+	for _, part := range msg.Parts {
+		switch part.Type {
+		case IRPartToolCall:
+			if part.ToolCall != nil {
+				hasToolCall = true
+			}
+		case IRPartReasoning:
+		default:
+			return false
+		}
+	}
+	return hasToolCall
+}
+
+func hasToolCallPart(msg IRMessage) bool {
+	if msg.Role != IRRoleAssistant {
+		return false
+	}
+	for _, part := range msg.Parts {
+		if part.Type == IRPartToolCall && part.ToolCall != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // =============================================================================

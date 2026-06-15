@@ -17,7 +17,6 @@ import (
 // BootstrapOptions controls host-level CLI bootstrap side effects.
 type BootstrapOptions struct {
 	SkillsSourceDir string
-	MCP             engines.MCPServerConfig
 }
 
 // ============================================================
@@ -28,7 +27,6 @@ type BootstrapOptions struct {
 type BootstrapService struct {
 	cliDiscovery *CLIDiscoveryService
 	skillSync    *SkillSyncService
-	mcpRegistrar *MCPRegistrarService
 }
 
 // NewBootstrapService 创建 BootstrapService 实例。
@@ -36,7 +34,6 @@ func NewBootstrapService() *BootstrapService {
 	return &BootstrapService{
 		cliDiscovery: NewCLIDiscoveryService(),
 		skillSync:    NewSkillSyncService(),
-		mcpRegistrar: NewMCPRegistrarService(),
 	}
 }
 
@@ -95,13 +92,6 @@ func (s *BootstrapService) Bootstrap(ctx context.Context, cfg *config.CLIEngines
 		} else {
 			logs.Info("Skills synced to external CLI directories")
 		}
-	}
-
-	// === Layer 4: MCP Registration ===
-	logs.Info("Registering MCP servers for available CLIs...")
-	if err := s.mcpRegistrar.RegisterAll(clis, opts.MCP); err != nil {
-		bootstrapErr = appendError(bootstrapErr, err)
-		logs.Warnf("Register MCP failed: %v", err)
 	}
 
 	logs.Info("CLI bootstrap complete")
@@ -202,48 +192,4 @@ func NewSkillSyncService() *SkillSyncService {
 // SyncToExternal 将 workspace skills 同步到外部 CLI 目录。
 func (s *SkillSyncService) SyncToExternal(dirs []string) error {
 	return engines.ReconcileExternalSkillLinks(dirs)
-}
-
-// ============================================================
-// Layer 4: MCP Registrar Service (注册层)
-// ============================================================
-
-// MCPRegistrarService 负责 MCP 服务器的注册。
-type MCPRegistrarService struct{}
-
-// NewMCPRegistrarService 创建 MCPRegistrarService 实例。
-func NewMCPRegistrarService() *MCPRegistrarService {
-	return &MCPRegistrarService{}
-}
-
-// RegisterAll 为所有已安装的 CLI 注册 MCP 服务器。
-func (s *MCPRegistrarService) RegisterAll(clis []engines.CLIToolStatus, cfg engines.MCPServerConfig) error {
-	if cfg.URL == "" {
-		logs.Debug("No MCP URL provided, skipping registration")
-		return nil
-	}
-
-	cfg = engines.NormalizeMCPServerConfig(cfg)
-	var errs error
-
-	for _, cli := range clis {
-		if !cli.Installed {
-			continue
-		}
-
-		engine, err := newEngine(cli.Name, cli.Path)
-		if err != nil {
-			errs = appendError(errs, err)
-			continue
-		}
-
-		if err := engine.RegisterMCP(context.Background(), cfg); err != nil {
-			errs = appendError(errs, err)
-			logs.Warnf("Failed to register MCP for %s: %v", cli.Name, err)
-			continue
-		}
-		logs.Infof("Registered MCP server for %s", cli.Name)
-	}
-
-	return errs
 }

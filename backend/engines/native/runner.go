@@ -12,7 +12,6 @@ import (
 	einotool "github.com/cloudwego/eino/components/tool"
 	"github.com/insmtx/Leros/backend/engines"
 	"github.com/insmtx/Leros/backend/internal/api/contract"
-	"github.com/insmtx/Leros/backend/internal/runtime/deps"
 	"github.com/insmtx/Leros/backend/internal/runtime/events"
 	runtimetodo "github.com/insmtx/Leros/backend/internal/runtime/todo"
 	pkgeino "github.com/insmtx/Leros/backend/pkg/eino"
@@ -44,21 +43,18 @@ type Runner struct {
 }
 
 // NewRunner 创建基于 Eino Flow 的 Leros 内置 Agent。
-func NewRunner(ctx context.Context, env *deps.Container) (*Runner, error) {
+func NewRunner(ctx context.Context, env *tools.Registry) (*Runner, error) {
 	if env == nil {
-		return nil, fmt.Errorf("runtime dependencies are required")
-	}
-	if env.ToolRegistry() == nil {
 		return nil, fmt.Errorf("tool registry is required")
 	}
 
-	registry := env.ToolRegistry()
+	registry := env
 	if err := registry.Register(artifactdeclare.NewTool()); err != nil {
 		return nil, fmt.Errorf("register artifact_declare tool: %w", err)
 	}
 
 	return &Runner{
-		toolAdapter: newToolAdapter(env.ToolRegistry()),
+		toolAdapter: newToolAdapter(registry),
 	}, nil
 }
 

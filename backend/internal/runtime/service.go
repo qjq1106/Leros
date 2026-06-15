@@ -9,11 +9,17 @@ import (
 	"github.com/insmtx/Leros/backend/engines"
 	"github.com/insmtx/Leros/backend/engines/builtin"
 	"github.com/insmtx/Leros/backend/internal/agent"
-	"github.com/insmtx/Leros/backend/internal/runtime/deps"
 	"github.com/insmtx/Leros/backend/internal/runtime/drivers/externalcli"
 	"github.com/insmtx/Leros/backend/internal/runtime/lifecycle"
 	lifecyclecontext "github.com/insmtx/Leros/backend/internal/runtime/lifecycle/context"
 	"github.com/insmtx/Leros/backend/internal/runtime/lifecycle/steps"
+	skillstore "github.com/insmtx/Leros/backend/internal/skill/store"
+	"github.com/insmtx/Leros/backend/tools"
+	memorytools "github.com/insmtx/Leros/backend/tools/memory"
+	nodetools "github.com/insmtx/Leros/backend/tools/node"
+	skillmanagetools "github.com/insmtx/Leros/backend/tools/skill_manage"
+	skillusetools "github.com/insmtx/Leros/backend/tools/skill_use"
+	todotools "github.com/insmtx/Leros/backend/tools/todo"
 	"github.com/ygpkg/yg-go/logs"
 )
 
@@ -25,17 +31,16 @@ type Options struct {
 }
 
 type Service struct {
-	env    *deps.Container
+	env    *tools.Registry
 	router agent.Runner
 }
 
 func NewService(ctx context.Context, opts Options) (*Service, error) {
-	env, err := deps.New(ctx, deps.Options{
-		CLISkillDirs: opts.CLISkillDirs,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create runtime dependencies: %w", err)
+	env := tools.NewRegistry()
+	if err := registerTools(env, opts.CLISkillDirs); err != nil {
+		return nil, fmt.Errorf("register runtime tools: %w", err)
 	}
+	logs.Infof("Loaded %d tools for runtime", len(env.List()))
 
 	s := &Service{env: env}
 
@@ -60,7 +65,7 @@ func (s *Service) Run(ctx context.Context, req *agent.RequestContext) (*agent.Ru
 	return s.router.Run(ctx, req)
 }
 
-func (s *Service) Environment() *deps.Container {
+func (s *Service) Environment() *tools.Registry {
 	return s.env
 }
 
@@ -92,6 +97,10 @@ func (s *Service) buildRouter(ctx context.Context, opts Options) (agent.Runner, 
 		// 仅外部 CLI 引擎需要审批路由器；native 的 Approver 是 noop。
 		if name != engines.EngineNative {
 			runner.SetApprovalHandler(engines.DefaultApprovalRouter)
+		}
+		// 传递 MCP 配置供引擎启动时注入。
+		if mcpServers := buildMCPServersFromConfig(opts.CLIConfig); len(mcpServers) > 0 {
+			runner.SetMCPServers(mcpServers)
 		}
 		logs.Infof("Registering agent runtime: %s", name)
 
@@ -132,4 +141,50 @@ func (s *Service) selectDefaultRuntime(defaultRuntime string, opts Options, cliN
 		return opts.CLIConfig.Default
 	}
 	return agent.RuntimeKindLeros
+}
+
+// buildMCPServersFromConfig 从 CLI 配置中提取 MCP 服务列表。
+func buildMCPServersFromConfig(cliCfg *config.CLIEnginesConfig) []engines.MCPServerConfig {
+	if cliCfg == nil || cliCfg.MCP == nil {
+		return nil
+	}
+	cfg := engines.MCPServerConfig{
+		URL:         cliCfg.MCP.URL,
+		BearerToken: cliCfg.MCP.BearerToken,
+	}
+	cfg = engines.NormalizeMCPServerConfig(cfg)
+	if cfg.URL == "" {
+		return nil
+	}
+	return []engines.MCPServerConfig{cfg}
+}
+
+func registerTools(registry *tools.Registry, cliSkillDirs []string) error {
+	if err := skillusetools.Register(registry); err != nil {
+		return fmt.Errorf("register skill use tool: %w", err)
+	}
+	skillmanagetools.OnMutation = func(ctx context.Context, kind skillstore.MutationKind, name, action string) {
+		if len(cliSkillDirs) > 0 {
+			switch kind {
+			case skillstore.MutationCreate:
+				_ = engines.EnsureExternalSkillLink(name, cliSkillDirs)
+			case skillstore.MutationDelete:
+				_ = engines.RemoveExternalSkillLink(name, cliSkillDirs)
+			}
+		}
+	}
+
+	if err := skillmanagetools.Register(registry); err != nil {
+		return fmt.Errorf("register skill manage tool: %w", err)
+	}
+	if err := memorytools.Register(registry); err != nil {
+		return fmt.Errorf("register memory tool: %w", err)
+	}
+	if err := todotools.Register(registry); err != nil {
+		return fmt.Errorf("register todo tool: %w", err)
+	}
+	if err := nodetools.Register(registry); err != nil {
+		return fmt.Errorf("register node tools: %w", err)
+	}
+	return nil
 }

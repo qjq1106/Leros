@@ -175,31 +175,25 @@ func runTaskWorker(defaultRuntime string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var cliSkillDirs []string
 	// Bootstrap engines: always sync built-in skills to .leros/skills (serves native engine).
-	// If CLI engines are configured, also sync symlinks and register MCP.
+	// If CLI engines are configured, also sync symlinks.
 	{
 		var cliCfg *config.CLIEnginesConfig
 		if cfg.CLI != nil {
 			cliCfg = cfg.CLI
 		}
-		var mcpCfg engines.MCPServerConfig
-		if cfg.CLI != nil && cfg.CLI.MCP != nil {
-			mcpCfg = engines.MCPServerConfig{
-				URL:         cfg.CLI.MCP.URL,
-				BearerToken: cfg.CLI.MCP.BearerToken,
-			}
-		}
-		if mcpCfg.URL == "" && workerListenAddr != "" {
-			mcpCfg.URL = buildWorkerMCPURL(workerListenAddr)
-		}
 		bootstrapSvc := builtin.NewBootstrapService()
-		updatedCLICfg, err := bootstrapSvc.Bootstrap(ctx, cliCfg, builtin.BootstrapOptions{
-			MCP: mcpCfg,
-		})
+		updatedCLICfg, err := bootstrapSvc.Bootstrap(ctx, cliCfg, builtin.BootstrapOptions{})
 		if err != nil {
 			logs.Warnf("Bootstrap engines failed: %v", err)
 		}
 		if updatedCLICfg != nil {
 			cfg.CLI = updatedCLICfg
+		}
+		// 默认注入 Leros MCP，确保引擎启动时始终携带业务 MCP 工具（per-run 注入路径）。
+		if cfg.CLI != nil && cfg.CLI.MCP == nil && workerListenAddr != "" {
+			cfg.CLI.MCP = &config.MCPConfig{
+				URL: buildWorkerMCPURL(workerListenAddr),
+			}
 		}
 		cliSkillDirs = bootstrapSvc.GetSkillDirs()
 	}

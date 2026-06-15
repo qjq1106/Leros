@@ -28,18 +28,6 @@ func (a *Adapter) Prepare(_ context.Context, _ engines.PrepareRequest) error {
 	return nil
 }
 
-// RegisterMCP registers a streamable HTTP MCP server with Claude Code.
-func (a *Adapter) RegisterMCP(ctx context.Context, cfg engines.MCPServerConfig) error {
-	cfg = engines.NormalizeMCPServerConfig(cfg)
-	_ = engines.RunCLICommand(ctx, a.invoker.binary, []string{"mcp", "remove", cfg.Name}, nil)
-
-	args := []string{"mcp", "add", "--transport", "http", cfg.Name, "--scope", "user", cfg.URL}
-	if cfg.BearerToken != "" {
-		args = append(args, "--header", "Authorization: Bearer "+cfg.BearerToken)
-	}
-	return engines.RunCLICommand(ctx, a.invoker.binary, args, nil)
-}
-
 // GetSkillDir returns the skill directory path for Claude Code.
 func (a *Adapter) GetSkillDir() string {
 	home, err := os.UserHomeDir()

@@ -105,6 +105,52 @@ func claudeModelEnv(_ engines.ModelConfig) map[string]string {
 	return nil
 }
 
+// ——— MCP 配置写入 ———
+
+// writeMCPConfig 将 MCPServerConfig 列表转为 Claude mcpServers JSON，写入 dir/mcp_config.json。
+// 返回文件路径，调用方负责在不再需要时删除。
+func writeMCPConfig(dir string, servers []engines.MCPServerConfig) (string, error) {
+	mcpServers := make(map[string]any, len(servers))
+	for _, s := range servers {
+		name := strings.TrimSpace(s.Name)
+		if name == "" {
+			name = "leros"
+		}
+		entry := map[string]any{}
+		if s.Command != "" {
+			entry["command"] = s.Command
+			if len(s.Args) > 0 {
+				entry["args"] = s.Args
+			}
+			if len(s.Env) > 0 {
+				entry["env"] = s.Env
+			}
+		} else if s.URL != "" {
+			entry["type"] = "http"
+			entry["url"] = s.URL
+			if s.BearerToken != "" {
+				entry["headers"] = map[string]string{
+					"Authorization": "Bearer " + s.BearerToken,
+				}
+			}
+		}
+		mcpServers[name] = entry
+	}
+
+	data, err := sonic.MarshalIndent(map[string]any{"mcpServers": mcpServers}, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "mcp_config.json")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 // ——— 通用工具 ———
 
 func withoutV1Suffix(baseURL string) string {

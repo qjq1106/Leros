@@ -74,6 +74,12 @@ func emitTerminalRunEvent(ctx context.Context, journal *RunJournal, req *agent.R
 		return nil
 	}
 	normalizeTerminalResult(journal, result)
+	if result.Metadata == nil {
+		result.Metadata = map[string]any{}
+	}
+	if !result.StartedAt.IsZero() {
+		result.Metadata["run_started_at_ms"] = result.StartedAt.UnixMilli()
+	}
 	result.Metadata = mergeRunMetadata(req, result.Metadata)
 	payload := terminalRunPayload(journal, result)
 	event := events.NewRunCompleted(payload, resultMessage(result))
@@ -183,10 +189,37 @@ func mergeRunMetadata(req *agent.RequestContext, resultMetadata map[string]any) 
 	for key, value := range resultMetadata {
 		merged[key] = value
 	}
+	injectExecutionMetadata(merged, req)
 	if len(merged) == 0 {
 		return nil
 	}
 	return merged
+}
+
+func injectExecutionMetadata(merged map[string]any, req *agent.RequestContext) {
+	if req == nil {
+		return
+	}
+	setIfMissing(merged, "run_id", req.RunID)
+	setIfMissing(merged, "model_provider", req.Model.Provider)
+	setIfMissing(merged, "model_name", req.Model.Model)
+	setIfMissing(merged, "assistant_id", req.Assistant.ID)
+	if req.Input.Type != "" {
+		setIfMissing(merged, "input_type", string(req.Input.Type))
+	}
+	if req.Policy.PermissionMode != "" {
+		setIfMissing(merged, "permission_mode", req.Policy.PermissionMode)
+	}
+}
+
+func setIfMissing(merged map[string]any, key string, value string) {
+	if value == "" {
+		return
+	}
+	if _, ok := merged[key]; ok {
+		return
+	}
+	merged[key] = value
 }
 
 func requestRunID(req *agent.RequestContext) string {

@@ -58,10 +58,7 @@ func RequestFromWorkerTask(msg protocol.WorkerTaskMessage) *agent.RequestContext
 			RequireApproval: msg.Body.Policy.RequireApproval,
 			PermissionMode:  msg.Body.Policy.PermissionMode,
 		},
-		Metadata: map[string]any{
-			"message_id": msg.ID,
-			"metadata":   msg.Metadata,
-		},
+		Metadata: mergedMetadata(msg),
 	}
 }
 
@@ -93,6 +90,17 @@ func attachmentsFromTask(attachments []protocol.Attachment) []agent.Attachment {
 		})
 	}
 	return result
+}
+
+func mergedMetadata(msg protocol.WorkerTaskMessage) map[string]any {
+	metadata := make(map[string]any, len(msg.Metadata)+1)
+	for k, v := range msg.Metadata {
+		metadata[k] = v
+	}
+	if msg.ID != "" {
+		metadata["message_id"] = msg.ID
+	}
+	return metadata
 }
 
 func firstNonEmpty(values ...string) string {
