@@ -32,3 +32,13 @@ export function formatTokenCount(count: number): string {
 	if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
 	return String(count);
 }
+
+/** 格式化单条回复耗时：不足 1 秒用 ms，否则用秒。 */
+export function formatLatency(ms: number): string {
+	if (!Number.isFinite(ms) || ms <= 0) return "0ms";
+	if (ms >= 1000) {
+		const seconds = ms / 1000;
+		return seconds >= 10 ? `${Math.round(seconds)}s` : `${seconds.toFixed(1)}s`;
+	}
+	return `${Math.round(ms)}ms`;
+}

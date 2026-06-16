@@ -88,9 +88,15 @@ export {
 	messageArtifactToProjectArtifact,
 } from "./utils/artifacts";
 export { AUTH_SESSION_EXPIRED_EVENT, getValidJwtToken } from "./utils/authStorage";
-export { formatDate, formatFileSize, formatTime, formatTokenCount } from "./utils/format";
+export {
+	formatDate,
+	formatFileSize,
+	formatLatency,
+	formatTime,
+	formatTokenCount,
+} from "./utils/format";
 export {
 	buildMessageMetadata,
-	getAssistantMessageMetrics,
+	getAssistantMessageFooterSegments,
 	latencyFromRunCompletedTimes,
 } from "./utils/messageMetrics";
