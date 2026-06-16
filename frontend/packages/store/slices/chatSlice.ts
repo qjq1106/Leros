@@ -92,7 +92,7 @@ function mapBackendMessage(msg: BackendMessage): Message {
 		content: msg.content ?? "",
 		timestamp: msg.timestamp ?? new Date(msg.created_at).getTime(),
 		sequence: msg.sequence,
-		metadata: mapMetadata(msg.metadata),
+		metadata: buildMessageMetadata(msg.metadata),
 		usage: mapUsage(msg.usage),
 	};
 
@@ -124,15 +124,6 @@ function mapToolCalls(tcList?: BackendToolCall[]): ToolCall[] | undefined {
 
 type NormalizedSessionEvent = Exclude<BackendMessageChunk, string> | SSEMessageEvent;
 type SessionEventLike = BackendMessageChunk | SSEMessageEvent;
-
-function mapMetadata(metadata?: {
-	model?: string;
-	tokens?: number;
-	latency?: number;
-	extra?: Record<string, unknown>;
-}): MessageMetadata | undefined {
-	return buildMessageMetadata(metadata);
-}
 
 function mapUsage(usage?: {
 	input_tokens?: number;

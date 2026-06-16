@@ -2,7 +2,7 @@
 
 import {
 	formatTime,
-	getAssistantMessageMetrics,
+	getAssistantMessageFooterSegments,
 	mapBackendArtifactToProjectArtifact,
 	mergeProjectArtifacts,
 	messageArtifactToProjectArtifact,
@@ -63,12 +63,7 @@ export function AIMessageBubble({
 	const hasThinking = (message.thinking ?? "").trim().length > 0;
 	const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
 	const hasArtifacts = message.artifacts && message.artifacts.length > 0;
-	const metrics = getAssistantMessageMetrics(message);
-	const metricSegments = [
-		metrics?.model,
-		metrics?.tokens !== undefined ? `${metrics.tokens} tokens` : undefined,
-		metrics?.latency !== undefined ? `${metrics.latency}ms` : undefined,
-	].filter((segment): segment is string => Boolean(segment));
+	const metricSegments = getAssistantMessageFooterSegments(message);
 
 	return (
 		<div data-slot="ai-message" className="group flex items-start gap-3">

@@ -1,4 +1,5 @@
 import type { Message, MessageMetadata, MessageUsage } from "../types/chat";
+import { formatLatency, formatTokenCount } from "./format";
 
 type MetadataSource = {
 	model?: string;
@@ -55,10 +56,25 @@ export function buildMessageMetadata(
 	return { model, tokens, latency };
 }
 
-/** 获取单条 assistant 消息 footer 应展示的 model / tokens / latency。 */
-export function getAssistantMessageMetrics(message: Message): MessageMetadata | undefined {
+/** 读取单条 assistant 消息的 tokens / latency 原始指标。 */
+function getAssistantMessageMetrics(message: Message): MessageMetadata | undefined {
 	if (message.role !== "assistant") return undefined;
 	return buildMessageMetadata(message.metadata, message.usage);
+}
+
+/** 生成消息 footer 展示片段：仅耗时与 token 用量。 */
+export function getAssistantMessageFooterSegments(message: Message): string[] {
+	const metrics = getAssistantMessageMetrics(message);
+	if (!metrics) return [];
+
+	const segments: string[] = [];
+	if (metrics.latency !== undefined) {
+		segments.push(formatLatency(metrics.latency));
+	}
+	if (metrics.tokens !== undefined) {
+		segments.push(`${formatTokenCount(metrics.tokens)} tokens`);
+	}
+	return segments;
 }
 
 /** 将 usage 中的 token 总数回填到 metadata，便于统一展示逻辑。 */
