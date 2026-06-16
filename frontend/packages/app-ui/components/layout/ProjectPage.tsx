@@ -1134,7 +1134,7 @@ function ProjectArtifactList({
 								</span>
 							</div>
 							<div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--leros-primary-softer)]">
-								<ProjectFileTypeIcon fileName={artifact.name} artifactType={artifact.type} />
+								<ProjectFileTypeIcon fileName={artifact.name} />
 							</div>
 							<div className="min-w-0">
 								<div className="truncate text-sm font-normal leading-5 text-[var(--leros-text-strong)]">

@@ -1,8 +1,4 @@
-import { FileText, ImageIcon, Table2 } from "lucide-react";
-
-type ProjectArtifactIconType = "document" | "spreadsheet" | "image";
-
-/** 根据文件名后缀或产物类型返回与文件/产物列表一致的图标资源路径 */
+/** 根据文件名后缀返回与文件 Tab 一致的图标资源路径 */
 export function getProjectFileIconSrc(fileName: string): string {
 	const lowerPath = fileName.toLowerCase();
 
@@ -25,24 +21,11 @@ export function getProjectFileIconSrc(fileName: string): string {
 /** 文件 Tab 与产物卡片共用的类型图标组件 */
 export function ProjectFileTypeIcon({
 	fileName,
-	artifactType,
 	className = "size-6 object-contain",
 }: {
 	fileName: string;
-	artifactType?: ProjectArtifactIconType;
 	className?: string;
 }) {
-	// 产物场景优先使用后端返回的类型，避免无扩展名时图标退化。
-	if (artifactType === "spreadsheet") {
-		return <Table2 className={className} aria-hidden="true" />;
-	}
-	if (artifactType === "image") {
-		return <ImageIcon className={className} aria-hidden="true" />;
-	}
-	if (artifactType === "document") {
-		return <FileText className={className} aria-hidden="true" />;
-	}
-
 	return (
 		<img src={getProjectFileIconSrc(fileName)} alt="" className={className} aria-hidden="true" />
 	);
