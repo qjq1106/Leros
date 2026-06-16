@@ -12,7 +12,6 @@ import { artifactApi } from "@leros/store/api/artifactApi";
 import { cn } from "@leros/ui/lib/utils";
 import {
 	Bot,
-	Calendar,
 	CheckCircle2,
 	ChevronsLeftRightEllipsis,
 	Circle,
@@ -23,7 +22,6 @@ import {
 	LoaderCircle,
 	Search,
 	Settings,
-	Tag,
 	Trash2,
 	X,
 } from "lucide-react";
@@ -442,7 +440,7 @@ function ProjectTasks({
 	const [deleteTarget, setDeleteTarget] = useState<ProjectTask | null>(null);
 
 	const handleStatusToggle = async (task: ProjectTask) => {
-		// 保留项目页中的快捷状态切换，避免这次样式整理带出交互回归。
+		// 固定任务图标和状态切换拆开，避免统一视觉时把原有交互丢掉。
 		await updateTask({
 			public_id: task.id,
 			status: NEXT_STATUS[task.status] ?? "todo",
@@ -519,10 +517,30 @@ function ProjectTaskList({
 							compact ? "gap-3 rounded-lg px-3.5 py-3" : "gap-3.5 rounded-lg px-4 py-3.5",
 						)}
 					>
-						{onStatusToggle ? (
+						<div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--leros-primary-softer)] text-[var(--leros-primary)]">
+							{/* 主列表和右侧列表统一使用固定任务图标，避免状态图标和语义图标混用。 */}
+							<TaskCardIcon className="size-5" />
+						</div>
+						<button
+							type="button"
+							className="min-w-0 flex-1 text-left"
+							onClick={() => onOpen?.(task)}
+							disabled={!onOpen}
+							title={onOpen ? "打开任务会话" : undefined}
+						>
+							<div
+								className={cn(
+									"text-sm font-normal leading-5 text-[var(--leros-text-strong)]",
+									"line-clamp-2",
+								)}
+							>
+								{task.title}
+							</div>
+						</button>
+						{!compact && onStatusToggle && (
 							<button
 								type="button"
-								className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--leros-primary-softer)]"
+								className="mt-0.5 shrink-0 rounded p-0.5 text-[var(--leros-text-muted)] transition-colors hover:bg-[var(--leros-primary-softer)]"
 								onClick={(event) => {
 									event.stopPropagation();
 									onStatusToggle(task);
@@ -537,48 +555,7 @@ function ProjectTaskList({
 									<Circle className="size-4 text-[var(--leros-text-muted)]" />
 								)}
 							</button>
-						) : (
-							<div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--leros-primary-softer)]">
-								<TaskCardIcon />
-							</div>
 						)}
-						<button
-							type="button"
-							className="min-w-0 flex-1 text-left"
-							onClick={() => onOpen?.(task)}
-							disabled={!onOpen}
-							title={onOpen ? "打开任务会话" : undefined}
-						>
-							<div
-								className={cn(
-									"text-sm font-normal leading-5 text-[var(--leros-text-strong)]",
-									compact ? "line-clamp-2" : "truncate",
-								)}
-							>
-								{task.title}
-							</div>
-							{!compact && (
-								<div className="mt-1 truncate text-xs leading-4 text-[var(--leros-text-muted)]">
-									{task.meta}
-								</div>
-							)}
-							{!compact && (task.taskType || task.deadline) && (
-								<div className="mt-2 flex flex-wrap items-center gap-2">
-									{task.taskType && (
-										<span className="inline-flex items-center gap-1 rounded-md bg-[var(--leros-primary-softer)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--leros-primary)]">
-											<Tag className="size-3" />
-											{task.taskType}
-										</span>
-									)}
-									{task.deadline && (
-										<span className="inline-flex items-center gap-1 rounded-md bg-[var(--leros-chat-control-bg)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--leros-text-muted)]">
-											<Calendar className="size-3" />
-											{task.deadline}
-										</span>
-									)}
-								</div>
-							)}
-						</button>
 						{!compact && onDelete && (
 							<button
 								type="button"

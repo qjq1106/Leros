@@ -1,3 +1,5 @@
+import { ClipboardList } from "lucide-react";
+
 /** 根据文件名后缀返回与文件 Tab 一致的图标资源路径 */
 export function getProjectFileIconSrc(fileName: string): string {
 	const lowerPath = fileName.toLowerCase();
@@ -31,9 +33,9 @@ export function ProjectFileTypeIcon({
 	);
 }
 
-/** 任务卡片左侧占位图标，先复用文档图标保证视觉统一 */
+/** 任务卡片统一使用固定任务图标，和右侧任务列表保持一致 */
 export function TaskCardIcon({ className = "size-6 object-contain" }: { className?: string }) {
-	return <ProjectFileTypeIcon fileName="" className={className} />;
+	return <ClipboardList className={className} aria-hidden="true" />;
 }
 
 /** 右侧紧凑列表最多展示 5 条，超出后内部滚动并隐藏滚动条 */
