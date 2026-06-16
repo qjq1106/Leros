@@ -27,6 +27,10 @@ import {
 	Table2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import {
+	SHOW_ASSISTANT_MESSAGE_METRICS,
+	SHOW_ASSISTANT_MESSAGE_REGENERATE_BUTTON,
+} from "../../constants/temporaryUiFlags";
 import { MarkdownRenderer } from "../common/MarkdownRenderer";
 import { ArtifactPreviewDialog } from "../layout/ArtifactPreviewDialog";
 import { ToolCallBlock } from "./ToolCallBlock";
@@ -63,7 +67,9 @@ export function AIMessageBubble({
 	const hasThinking = (message.thinking ?? "").trim().length > 0;
 	const hasToolCalls = message.toolCalls && message.toolCalls.length > 0;
 	const hasArtifacts = message.artifacts && message.artifacts.length > 0;
-	const metricSegments = getAssistantMessageFooterSegments(message);
+	const metricSegments = SHOW_ASSISTANT_MESSAGE_METRICS
+		? getAssistantMessageFooterSegments(message)
+		: [];
 
 	return (
 		<div data-slot="ai-message" className="group flex items-start gap-3">
@@ -126,14 +132,16 @@ export function AIMessageBubble({
 						)}
 						<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
 							<CopyButton text={content} />
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								className="text-slate-400 hover:text-slate-600"
-								onClick={() => resendMessage(message.id)}
-							>
-								<RefreshCw className="size-3.5" />
-							</Button>
+							{SHOW_ASSISTANT_MESSAGE_REGENERATE_BUTTON && (
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									className="text-slate-400 hover:text-slate-600"
+									onClick={() => resendMessage(message.id)}
+								>
+									<RefreshCw className="size-3.5" />
+								</Button>
+							)}
 						</div>
 					</div>
 				)}
