@@ -59,7 +59,7 @@ export function ChatInput({ variant = "default" }: { variant?: "default" | "proj
 	const submitMessage = useCallback(() => {
 		if (inputText.trim() || inputAttachments.length > 0) {
 			if (isProjectVariant && currentView === "project") {
-				sendProjectMessage(inputText, activeProjectId);
+				sendProjectMessage(inputText, activeProjectId, inputAttachments);
 			} else {
 				sendMessage(inputText, inputAttachments);
 			}
