@@ -25,6 +25,7 @@ import type {
 	MessageArtifact,
 	MessageAttachment,
 	MessageMetadata,
+	MessageProcessStep,
 	MessageRole,
 	MessageUsage,
 	ModelOption,
@@ -100,9 +101,7 @@ function mapBackendMessage(msg: BackendMessage): Message {
 		usage: mapUsage(msg.usage),
 	};
 
-	let mapped = applySessionEventsToMessage(message, msg.chunks, {
-		appendContent: !message.content,
-	});
+	let mapped = applySessionEventsToMessage(message, msg.chunks);
 	if (msg.artifacts?.length) {
 		const artifacts = msg.artifacts
 			.map(mapArtifactPayload)
@@ -287,6 +286,126 @@ function getRunResultMessage(payload: BackendSessionEventPayload): string | unde
 	if (!payload.result || typeof payload.result !== "object") return undefined;
 	const value = payload.result as { message?: unknown };
 	return typeof value.message === "string" ? value.message : undefined;
+}
+
+function splitThinkingStepContent(content: string): string[] {
+	const normalized = content.replace(/\r\n/g, "\n");
+	const withStageBoundaries = normalized.replace(
+		/\n(?=(?:\*\*)?(?:下一步|接下来|现在|然后|最后|首先)[：:]?|#{1,6}\s)/g,
+		"\n\n",
+	);
+
+	return withStageBoundaries
+		.split(/\n{2,}/)
+		.map((segment) => segment.trim())
+		.filter(Boolean);
+}
+
+function createThinkingStepsFromContent(content: string, startIndex: number): MessageProcessStep[] {
+	const thinkingSegments = splitThinkingStepContent(content);
+	return thinkingSegments.map((segment, index) => ({
+		id: `thinking-${startIndex + index + 1}`,
+		type: "thinking" as const,
+		content: segment,
+	}));
+}
+
+function rebuildTrailingThinkingSteps(
+	steps: MessageProcessStep[] | undefined,
+	content: string,
+): MessageProcessStep[] {
+	const stableSteps = [...(steps ?? [])];
+	return [...stableSteps, ...createThinkingStepsFromContent(content, stableSteps.length)];
+}
+
+function appendProcessThinkingStep(
+	steps: MessageProcessStep[] | undefined,
+	delta: string,
+): MessageProcessStep[] {
+	if (!delta) return steps ?? [];
+
+	const next = [...(steps ?? [])];
+	const lastStep = next.at(-1);
+	if (lastStep?.type === "thinking") {
+		return rebuildTrailingThinkingSteps(next.slice(0, -1), lastStep.content + delta);
+	}
+
+	return rebuildTrailingThinkingSteps(next, delta);
+}
+
+function appendProcessToolCallStep(
+	steps: MessageProcessStep[] | undefined,
+	toolCallId: string,
+): MessageProcessStep[] {
+	if (!toolCallId) return steps ?? [];
+	if (steps?.some((step) => step.type === "tool_call" && step.toolCallId === toolCallId)) {
+		return steps;
+	}
+
+	return [
+		...(steps ?? []),
+		{
+			id: `tool-call-${toolCallId}`,
+			type: "tool_call",
+			toolCallId,
+		},
+	];
+}
+
+function trimDuplicatedProcessText(
+	processText: string,
+	finalContent: string | undefined,
+): string | undefined {
+	if (!processText) return processText;
+	if (!finalContent?.trim()) return processText;
+
+	const normalizedProcess = processText.replace(/\r\n/g, "\n").trimEnd();
+	const normalizedFinal = finalContent.replace(/\r\n/g, "\n").trim();
+	if (!normalizedProcess || !normalizedFinal) return processText;
+
+	if (normalizedProcess === normalizedFinal) {
+		return undefined;
+	}
+
+	// 中文注释：过程文本尾部如果已经开始输出最终答案，就在 run.completed 到来后裁掉这段重复尾巴。
+	for (
+		let overlap = Math.min(normalizedProcess.length, normalizedFinal.length);
+		overlap > 0;
+		overlap -= 1
+	) {
+		if (!normalizedProcess.endsWith(normalizedFinal.slice(0, overlap))) continue;
+		const trimmed = normalizedProcess.slice(0, normalizedProcess.length - overlap).trimEnd();
+		return trimmed || undefined;
+	}
+
+	return processText;
+}
+
+function trimDuplicatedProcessSteps(
+	steps: MessageProcessStep[] | undefined,
+	finalContent: string | undefined,
+): MessageProcessStep[] | undefined {
+	if (!steps?.length || !finalContent?.trim()) return steps;
+
+	const next = [...steps];
+	for (let index = next.length - 1; index >= 0; index -= 1) {
+		const step = next[index];
+		if (!step) continue;
+		if (step.type !== "thinking") continue;
+
+		const trimmed = trimDuplicatedProcessText(step.content, finalContent);
+		if (trimmed === step.content) {
+			return next;
+		}
+		if (!trimmed) {
+			next.splice(index, 1);
+			continue;
+		}
+		next[index] = { ...step, content: trimmed };
+		return next;
+	}
+
+	return next;
 }
 
 function metadataFromPayload(payload: BackendSessionEventPayload): MessageMetadata | undefined {
@@ -564,8 +683,7 @@ function mapToolCallEvent(
 function applySessionEventToMessage(
 	message: Message,
 	event: SessionEventLike,
-	eventType: string | undefined,
-	options: { appendContent: boolean },
+	eventType?: string,
 ): Message {
 	const normalizedEvent = normalizeSessionEvent(event);
 	if (!normalizedEvent) return message;
@@ -613,13 +731,19 @@ function applySessionEventToMessage(
 		case "message.delta":
 		case "message.result": {
 			const content = getEventContent(normalizedEvent, payload);
-			if (!content || !options.appendContent) return message;
-			return { ...message, content: message.content + content };
+			if (!content) return message;
+			return {
+				...message,
+				processSteps: appendProcessThinkingStep(message.processSteps, content),
+			};
 		}
 		case "reasoning.delta": {
 			const thinking = payload.thinking ?? getEventContent(normalizedEvent, payload);
 			if (!thinking) return message;
-			return { ...message, thinking: (message.thinking ?? "") + thinking };
+			return {
+				...message,
+				processSteps: appendProcessThinkingStep(message.processSteps, thinking),
+			};
 		}
 		case "tool_call.started":
 		case "tool_call.delta":
@@ -630,7 +754,11 @@ function applySessionEventToMessage(
 		case "tool_call.failed": {
 			const toolCall = mapToolCallEvent(normalizedEventType, payload);
 			if (!toolCall) return message;
-			return { ...message, toolCalls: upsertToolCall(message.toolCalls, toolCall) };
+			return {
+				...message,
+				toolCalls: upsertToolCall(message.toolCalls, toolCall),
+				processSteps: appendProcessToolCallStep(message.processSteps, toolCall.id),
+			};
 		}
 		case "run.completed": {
 			const resultMessage = getRunResultMessage(payload);
@@ -639,12 +767,11 @@ function applySessionEventToMessage(
 			const artifacts = payload.artifacts
 				?.map(mapArtifactPayload)
 				.filter((artifact): artifact is MessageArtifact => artifact !== undefined);
+			const finalContent = resultMessage?.trim() ? resultMessage : message.content;
 			return enrichAssistantMessageMetrics({
 				...message,
-				content:
-					options.appendContent && !message.content && resultMessage
-						? resultMessage
-						: message.content,
+				content: finalContent,
+				processSteps: trimDuplicatedProcessSteps(message.processSteps, finalContent),
 				artifacts: artifacts?.length
 					? mergeArtifacts(message.artifacts, artifacts)
 					: message.artifacts,
@@ -660,13 +787,9 @@ function applySessionEventToMessage(
 function applySessionEventsToMessage(
 	message: Message,
 	events: BackendMessageChunk[] | undefined,
-	options: { appendContent: boolean },
 ): Message {
 	if (!events?.length) return message;
-	return events.reduce(
-		(current, event) => applySessionEventToMessage(current, event, undefined, options),
-		message,
-	);
+	return events.reduce((current, event) => applySessionEventToMessage(current, event), message);
 }
 
 function isOptimisticMessage(message: Message): boolean {
@@ -813,11 +936,24 @@ function reconcilePersistedMessagesWithLocal(
 			findMessageByRoleOccurrence(localMessages, persistedMessage.role, roleOccurrence);
 
 		if (!localMatch?.attachments?.length || !persistedMessage.attachments?.length) {
-			return persistedMessage;
+			if (!localMatch) {
+				return persistedMessage;
+			}
+			return {
+				...persistedMessage,
+				// 中文注释：run.completed 后会回拉历史消息，这里优先保留流式阶段已经排好的过程步骤顺序，
+				// 避免历史 chunks 的排列方式把“思考/工具交叉过程”覆盖成分组展示。
+				processSteps: localMatch.processSteps?.length
+					? localMatch.processSteps
+					: persistedMessage.processSteps,
+			};
 		}
 
 		return {
 			...persistedMessage,
+			processSteps: localMatch.processSteps?.length
+				? localMatch.processSteps
+				: persistedMessage.processSteps,
 			attachments: mergeMessageAttachments(persistedMessage.attachments, localMatch.attachments),
 		};
 	});
@@ -1076,9 +1212,7 @@ export class ChatActionImpl {
 
 					const msg = this.#get().messagesMap[assistantMsgId];
 					if (msg) {
-						const nextMsg = applySessionEventToMessage(msg, data, eventType, {
-							appendContent: true,
-						});
+						const nextMsg = applySessionEventToMessage(msg, data, eventType);
 						if (nextMsg !== msg) {
 							this.#dispatchChat({
 								type: "updateMessage",
@@ -1101,7 +1235,10 @@ export class ChatActionImpl {
 						this.#dispatchChat({
 							type: "updateMessage",
 							id: assistantMsgId,
-							value: { ...msg, content: msg.content + event.data },
+							value: {
+								...msg,
+								processSteps: appendProcessThinkingStep(msg.processSteps, event.data),
+							},
 						});
 					}
 				}
