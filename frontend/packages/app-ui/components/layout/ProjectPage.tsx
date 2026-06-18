@@ -379,8 +379,8 @@ export function ProjectPage({
 		target.addEventListener("pointercancel", handlePointerUp);
 	};
 
-	// 右侧栏达到更宽阈值后，内部列表切换到常规排版，避免继续维持窄栏样式。
-	const showProjectSidebar = resolvedTab !== "files";
+	// 中文注释：项目右侧栏只在会话 tab 使用，任务 tab 不展示展开/拖拽能力。
+	const showProjectSidebar = resolvedTab === "chat";
 	const isWideRightSidebar = rightSidebarWidth >= PROJECT_RIGHT_SIDEBAR_WIDE_BREAKPOINT;
 	const rightSidebarWidthStyle = !rightSidebarCollapsed
 		? { width: `${rightSidebarWidth}px` }
@@ -428,15 +428,17 @@ export function ProjectPage({
 					>
 						<Search className="size-5" />
 					</button>
-					<button
-						type="button"
-						className="rounded-full p-1.5 transition-colors hover:bg-[var(--leros-primary-softer)]"
-						aria-label={rightSidebarCollapsed ? "展开右侧栏" : "收起右侧栏"}
-						title={rightSidebarCollapsed ? "展开右侧栏" : "收起右侧栏"}
-						onClick={() => setRightSidebarCollapsed((collapsed) => !collapsed)}
-					>
-						<LayoutPanelLeft className="size-5" />
-					</button>
+					{showProjectSidebar && (
+						<button
+							type="button"
+							className="rounded-full p-1.5 transition-colors hover:bg-[var(--leros-primary-softer)]"
+							aria-label={rightSidebarCollapsed ? "展开右侧栏" : "收起右侧栏"}
+							title={rightSidebarCollapsed ? "展开右侧栏" : "收起右侧栏"}
+							onClick={() => setRightSidebarCollapsed((collapsed) => !collapsed)}
+						>
+							<LayoutPanelLeft className="size-5" />
+						</button>
+					)}
 					<button
 						type="button"
 						className="rounded-full p-1.5 transition-colors hover:bg-[var(--leros-primary-softer)]"
@@ -630,7 +632,8 @@ function ProjectTasks({
 	const [deleteTarget, setDeleteTarget] = useState<ProjectTask | null>(null);
 
 	return (
-		<div className="mx-auto w-full max-w-[720px]">
+		// 中文注释：任务 tab 需要占用更宽的主内容区域，避免大屏下卡片挤在中间留下过多留白。
+		<div className="mx-auto w-full max-w-[1100px]">
 			<h2 className="text-lg font-semibold text-[var(--leros-text-strong)]">任务</h2>
 			<div className="mt-4">
 				<ProjectTaskList tasks={tasks} onDelete={setDeleteTarget} onOpen={onOpenTask} />

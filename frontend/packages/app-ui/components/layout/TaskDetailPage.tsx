@@ -19,12 +19,15 @@ import {
 	Bot,
 	Calendar,
 	CheckCircle2,
+	ChevronsLeft,
+	ChevronsRight,
 	Circle,
+	LayoutPanelLeft,
 	LoaderCircle,
 	Tag,
 	Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SHOW_TASK_TOKEN_USAGE_CARD } from "../../constants/temporaryUiFlags";
 import { MessageTimeline } from "../chat/MessageTimeline";
 import { ChatInput } from "../input/ChatInput";
@@ -39,6 +42,12 @@ const STATUS_LABEL: Record<string, string> = {
 	in_progress: "进行中",
 	done: "已完成",
 };
+
+const TASK_DETAIL_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY = "leros-task-detail-right-sidebar-width";
+const TASK_DETAIL_RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY = "leros-task-detail-right-sidebar-collapsed";
+const TASK_DETAIL_RIGHT_SIDEBAR_DEFAULT_WIDTH = 352;
+const TASK_DETAIL_RIGHT_SIDEBAR_MIN_WIDTH = 300;
+const TASK_DETAIL_RIGHT_SIDEBAR_MAX_WIDTH = 440;
 
 function truncateBreadcrumbText(text?: string | null, maxLength = 10) {
 	if (!text) {
@@ -83,6 +92,11 @@ export function TaskDetailPage({
 	const [task, setTask] = useState<ProjectTask | null>(null);
 	const [taskApiArtifacts, setTaskApiArtifacts] = useState<ProjectArtifact[]>([]);
 	const [previewArtifact, setPreviewArtifact] = useState<ProjectArtifact | null>(null);
+	const [rightSidebarWidth, setRightSidebarWidth] = useState(
+		TASK_DETAIL_RIGHT_SIDEBAR_DEFAULT_WIDTH,
+	);
+	const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
+	const hasLoadedRightSidebarPreferenceRef = useRef(false);
 
 	const resolvedProjectId = projectId ?? activeTaskDetailProjectId;
 	const resolvedTaskId = taskId ?? activeTaskDetailTaskId;
@@ -141,6 +155,9 @@ export function TaskDetailPage({
 		() => mergeProjectArtifacts(taskApiArtifacts, sessionArtifacts),
 		[taskApiArtifacts, sessionArtifacts],
 	);
+	const rightSidebarWidthStyle = !rightSidebarCollapsed
+		? { width: `${rightSidebarWidth}px` }
+		: undefined;
 
 	const fetchArtifacts = useCallback(async (taskId: string) => {
 		try {
@@ -209,6 +226,71 @@ export function TaskDetailPage({
 		fetchArtifacts(resolvedTaskId);
 	}, [resolvedTaskId, fetchArtifacts, isGenerating]);
 
+	useEffect(() => {
+		if (typeof window === "undefined" || hasLoadedRightSidebarPreferenceRef.current) return;
+		hasLoadedRightSidebarPreferenceRef.current = true;
+
+		const savedWidth = window.localStorage.getItem(TASK_DETAIL_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY);
+		const parsedWidth = savedWidth ? Number(savedWidth) : NaN;
+		if (Number.isFinite(parsedWidth)) {
+			setRightSidebarWidth(clampTaskDetailRightSidebarWidth(parsedWidth));
+		}
+
+		const savedCollapsed = window.localStorage.getItem(
+			TASK_DETAIL_RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY,
+		);
+		if (savedCollapsed) {
+			setRightSidebarCollapsed(savedCollapsed === "true");
+		}
+	}, []);
+
+	useEffect(() => {
+		if (typeof window === "undefined" || !hasLoadedRightSidebarPreferenceRef.current) return;
+		window.localStorage.setItem(
+			TASK_DETAIL_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY,
+			String(rightSidebarWidth),
+		);
+	}, [rightSidebarWidth]);
+
+	useEffect(() => {
+		if (typeof window === "undefined" || !hasLoadedRightSidebarPreferenceRef.current) return;
+		window.localStorage.setItem(
+			TASK_DETAIL_RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY,
+			String(rightSidebarCollapsed),
+		);
+	}, [rightSidebarCollapsed]);
+
+	const handleRightSidebarResizeStart = (event: React.PointerEvent<HTMLHRElement>) => {
+		if (rightSidebarCollapsed) return;
+
+		const startX = event.clientX;
+		const startWidth = rightSidebarWidth;
+		const pointerId = event.pointerId;
+		const target = event.currentTarget;
+
+		target.setPointerCapture(pointerId);
+
+		const handlePointerMove = (moveEvent: PointerEvent) => {
+			// 中文注释：任务页右侧栏挂在主内容右边，向左拖动时应放大宽度。
+			setRightSidebarWidth(
+				clampTaskDetailRightSidebarWidth(startWidth - (moveEvent.clientX - startX)),
+			);
+		};
+
+		const handlePointerUp = () => {
+			if (target.hasPointerCapture(pointerId)) {
+				target.releasePointerCapture(pointerId);
+			}
+			target.removeEventListener("pointermove", handlePointerMove);
+			target.removeEventListener("pointerup", handlePointerUp);
+			target.removeEventListener("pointercancel", handlePointerUp);
+		};
+
+		target.addEventListener("pointermove", handlePointerMove);
+		target.addEventListener("pointerup", handlePointerUp);
+		target.addEventListener("pointercancel", handlePointerUp);
+	};
+
 	if (!resolvedProjectId || !resolvedTaskId) {
 		return (
 			<div className="flex h-full flex-1 items-center justify-center bg-[var(--leros-app-bg)] text-[var(--leros-text-muted)]">
@@ -248,6 +330,15 @@ export function TaskDetailPage({
 					</h1>
 				</div>
 				<div className="flex items-center gap-3">
+					<button
+						type="button"
+						className="rounded-full p-1.5 text-[var(--leros-text-muted)] transition-colors hover:bg-[var(--leros-primary-softer)] hover:text-[var(--leros-primary)]"
+						aria-label={rightSidebarCollapsed ? "展开右侧栏" : "收起右侧栏"}
+						title={rightSidebarCollapsed ? "展开右侧栏" : "收起右侧栏"}
+						onClick={() => setRightSidebarCollapsed((collapsed) => !collapsed)}
+					>
+						<LayoutPanelLeft className="size-4.5" />
+					</button>
 					<button
 						type="button"
 						onClick={() => {
@@ -312,64 +403,116 @@ export function TaskDetailPage({
 					<ChatInput variant="project" />
 				</main>
 
-				<aside className="flex w-[352px] shrink-0 flex-col border-l border-[var(--leros-control-border)] bg-[var(--leros-surface-soft)] px-5 py-6">
-					<div className="min-h-0 flex-1 space-y-8 overflow-y-auto pr-1">
-						{SHOW_TASK_TOKEN_USAGE_CARD && (
-							<section>
-								<TaskTokenUsageCard
-									totalTokens={tokenSummary.totalTokens}
-									inputTokens={tokenSummary.inputTokens}
-									outputTokens={tokenSummary.outputTokens}
-									messageCount={tokenSummary.messageCount}
-								/>
-							</section>
-						)}
-						{task?.description && (
-							<section>
-								<h3 className="mb-3 text-xs font-semibold text-[var(--leros-text-muted)]">
-									任务描述
-								</h3>
-								<p className="text-sm leading-relaxed text-[var(--leros-text)]">
-									{task.description}
-								</p>
-							</section>
-						)}
-						{project && (
-							<section>
-								<h3 className="mb-3 text-xs font-semibold text-[var(--leros-text-muted)]">
-									所属项目
-								</h3>
-								<div className="rounded-lg border border-[var(--leros-control-border)] bg-[var(--leros-surface)] p-3.5">
-									<p className="text-sm font-semibold text-[var(--leros-text-strong)]">
-										{project.name}
+				{rightSidebarCollapsed && (
+					<button
+						type="button"
+						className="absolute right-6 top-[136px] z-20 inline-flex size-10 items-center justify-center rounded-full border border-[var(--leros-control-border)] bg-[var(--leros-surface)] text-[var(--leros-text-muted)] shadow-sm transition-colors hover:bg-[var(--leros-primary-softer)] hover:text-[var(--leros-primary)]"
+						aria-label="展开右侧栏"
+						title="展开右侧栏"
+						onClick={() => setRightSidebarCollapsed(false)}
+					>
+						<ChevronsLeft className="size-4" />
+					</button>
+				)}
+
+				{!rightSidebarCollapsed && (
+					<aside
+						className="relative flex shrink-0 flex-col border-l border-[var(--leros-control-border)] bg-[var(--leros-surface-soft)] px-5 py-6 transition-[width] duration-200 ease-out"
+						style={rightSidebarWidthStyle}
+					>
+						<div className="min-h-0 flex-1 space-y-8 overflow-y-auto pr-1">
+							<div className="flex items-start justify-between gap-3">
+								<div>
+									<p className="text-sm font-semibold text-[var(--leros-text-strong)]">任务侧栏</p>
+									<p className="mt-1 text-xs text-[var(--leros-text-muted)]">
+										查看任务说明、进度和产物概览
 									</p>
-									{project.description && (
-										<p className="mt-1 text-xs text-[var(--leros-text-muted)]">
-											{project.description}
-										</p>
-									)}
 								</div>
-							</section>
-						)}
-						{latestTodos && latestTodos.length > 0 && (
-							<section>
-								<h3 className="mb-3 text-xs font-semibold text-[var(--leros-text-muted)]">
-									任务进度
-								</h3>
-								<TaskTodoProgressPanel todos={latestTodos} />
-							</section>
-						)}
-						<section>
-							<div className="mb-3 flex items-center justify-between">
-								<h3 className="text-xs font-semibold text-[var(--leros-text-muted)]">任务产物</h3>
-								<span className="rounded-md bg-[var(--leros-primary-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--leros-primary)]">
-									{artifacts.length} 个
-								</span>
+								<button
+									type="button"
+									className="rounded-full p-1.5 text-[var(--leros-text-muted)] transition-colors hover:bg-[var(--leros-primary-softer)] hover:text-[var(--leros-text-strong)]"
+									aria-label="收起右侧栏"
+									title="收起右侧栏"
+									onClick={() => setRightSidebarCollapsed(true)}
+								>
+									<ChevronsRight className="size-4" />
+								</button>
 							</div>
-							<TaskArtifactList artifacts={artifacts} onPreview={setPreviewArtifact} />
-						</section>
-					</div>
-				</aside>
+							{SHOW_TASK_TOKEN_USAGE_CARD && (
+								<section>
+									<TaskTokenUsageCard
+										totalTokens={tokenSummary.totalTokens}
+										inputTokens={tokenSummary.inputTokens}
+										outputTokens={tokenSummary.outputTokens}
+										messageCount={tokenSummary.messageCount}
+									/>
+								</section>
+							)}
+							{task?.description && (
+								<section>
+									<h3 className="mb-3 text-xs font-semibold text-[var(--leros-text-muted)]">
+										任务描述
+									</h3>
+									<p className="text-sm leading-relaxed text-[var(--leros-text)]">
+										{task.description}
+									</p>
+								</section>
+							)}
+							{project && (
+								<section>
+									<h3 className="mb-3 text-xs font-semibold text-[var(--leros-text-muted)]">
+										所属项目
+									</h3>
+									<div className="rounded-lg border border-[var(--leros-control-border)] bg-[var(--leros-surface)] p-3.5">
+										<p className="text-sm font-semibold text-[var(--leros-text-strong)]">
+											{project.name}
+										</p>
+										{project.description && (
+											<p className="mt-1 text-xs text-[var(--leros-text-muted)]">
+												{project.description}
+											</p>
+										)}
+									</div>
+								</section>
+							)}
+							{latestTodos && latestTodos.length > 0 && (
+								<section>
+									<h3 className="mb-3 text-xs font-semibold text-[var(--leros-text-muted)]">
+										任务进度
+									</h3>
+									<TaskTodoProgressPanel todos={latestTodos} />
+								</section>
+							)}
+							<section>
+								<div className="mb-3 flex items-center justify-between">
+									<h3 className="text-xs font-semibold text-[var(--leros-text-muted)]">任务产物</h3>
+									<span className="rounded-md bg-[var(--leros-primary-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--leros-primary)]">
+										{artifacts.length} 个
+									</span>
+								</div>
+								<TaskArtifactList artifacts={artifacts} onPreview={setPreviewArtifact} />
+							</section>
+						</div>
+						<hr
+							className="absolute left-0 top-0 z-10 h-full w-3 -translate-x-1/2 cursor-col-resize border-0"
+							tabIndex={0}
+							aria-orientation="vertical"
+							aria-label="调整右侧栏宽度"
+							aria-valuemin={TASK_DETAIL_RIGHT_SIDEBAR_MIN_WIDTH}
+							aria-valuemax={TASK_DETAIL_RIGHT_SIDEBAR_MAX_WIDTH}
+							aria-valuenow={rightSidebarWidth}
+							onPointerDown={handleRightSidebarResizeStart}
+							onKeyDown={(event) => {
+								if (event.key === "ArrowLeft") {
+									setRightSidebarWidth(clampTaskDetailRightSidebarWidth(rightSidebarWidth + 8));
+								}
+								if (event.key === "ArrowRight") {
+									setRightSidebarWidth(clampTaskDetailRightSidebarWidth(rightSidebarWidth - 8));
+								}
+							}}
+						/>
+					</aside>
+				)}
 			</div>
 			<ArtifactPreviewDialog
 				artifact={previewArtifact}
@@ -381,6 +524,14 @@ export function TaskDetailPage({
 		</div>
 	);
 }
+
+function clampTaskDetailRightSidebarWidth(width: number) {
+	return Math.min(
+		TASK_DETAIL_RIGHT_SIDEBAR_MAX_WIDTH,
+		Math.max(TASK_DETAIL_RIGHT_SIDEBAR_MIN_WIDTH, width),
+	);
+}
+
 function TaskTokenUsageCard({
 	totalTokens,
 	inputTokens,
