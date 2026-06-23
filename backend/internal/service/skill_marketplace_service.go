@@ -231,7 +231,7 @@ func (s *skillMarketplaceService) resolveCacheAndTranslation(ctx context.Context
 			continue
 		}
 
-		if utils.CJKRatio(item.Description) >= 0.45 {
+		if utils.CJKRatio(item.Description) >= cjkTranslationThreshold {
 			// 已中文 → 直接写库
 			alreadyChinese = append(alreadyChinese, itemToCacheItem(item, item.Description))
 			continue
@@ -615,6 +615,7 @@ func (s *skillMarketplaceService) readDetailFromCache(ctx context.Context, item 
 	skillMDBody := zipBody
 
 	// 1. 优先使用 SKILL.zh-CN.md 覆盖正文和描述
+	hasChineseDoc := false
 	if item.PackageStoragePath != "" {
 		zhBody, zhDesc, zhErr := skillcache.ReadChineseDocumentFromStorage(ctx, s.st, item.PackageStoragePath)
 		if zhErr == nil && zhBody != "" {
@@ -622,13 +623,14 @@ func (s *skillMarketplaceService) readDetailFromCache(ctx context.Context, item 
 			if zhDesc != "" {
 				description = zhDesc
 			}
+			hasChineseDoc = true
 		} else {
 			logs.WarnContextf(ctx, "read SKILL.zh-CN.md for %s/%s@%s: %v", source, item.SkillID, item.Version, zhErr)
 		}
 	}
 
-	// 2. 正文非中文时，同步翻译
-	if skillMDBody == "" || utils.CJKRatioMarkdown(skillMDBody) < 0.45 {
+	// 2. 正文非中文时，同步翻译（但已有 SKILL.zh-CN.md 时跳过，避免二次翻译）
+	if !hasChineseDoc && (skillMDBody == "" || utils.CJKRatioMarkdown(skillMDBody) < cjkTranslationThreshold) {
 		if skillMDBody == "" {
 			skillMDBody = zipBody
 		}
@@ -713,7 +715,7 @@ func (s *skillMarketplaceService) refillMarketplaceSkillDetail(ctx context.Conte
 	// 统一 eager 翻译：有 translator、原文非中文时同步翻译
 	needEagerTranslate := s.translator != nil && bundle != nil &&
 		len(bundle.Content) > 0 &&
-		utils.CJKRatioMarkdown(string(bundle.Content)) < 0.45
+		utils.CJKRatioMarkdown(string(bundle.Content)) < cjkTranslationThreshold
 
 	var translatedContent string // eager translate 的完整翻译结果，用于异步缓存写入
 
@@ -999,10 +1001,11 @@ func (s *skillMarketplaceService) ImportSkill(ctx context.Context, req *contract
 	}, nil
 }
 
-const maxSkillMDFileSize = 1_048_576 // 1MB — consistent with consumer extractZipSkill
-
-// skillManagementTimeout is the deadline for NATS request-reply skill operations.
-const skillManagementTimeout = 30 * time.Second
+const (
+	maxSkillMDFileSize      = 1_048_576 // 1MB — consistent with consumer extractZipSkill
+	skillManagementTimeout  = 30 * time.Second
+	cjkTranslationThreshold = 0.35 // CJK 字符占比阈值：达到此比例视为已中文，不再翻译
+)
 
 var skillNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
