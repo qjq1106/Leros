@@ -52,6 +52,7 @@ func (s PushWorkspaceStep) Run(ctx context.Context, state *State) error {
 	pushCmd := exec.CommandContext(ctx, "git", "push", "origin", "main")
 	pushCmd.Dir = repoDir
 	if output, err := pushCmd.CombinedOutput(); err != nil {
+		logs.ErrorContextf(ctx, "git push failed: %v: %s", err, strings.TrimSpace(string(output)))
 		return fmt.Errorf("git push: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	logs.InfoContextf(ctx, "push_workspace completed: repo_dir=%s", repoDir)
