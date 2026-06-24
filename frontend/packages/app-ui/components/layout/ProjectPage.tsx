@@ -867,23 +867,23 @@ function ProjectFiles({
 	}, [previewFile]);
 
 	// 中文注释：当前 files 页签的上传入口仍处于注释停用状态，先保留实现并显式标记未启用，避免误恢复旧交互。
-	const _handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-		const file = event.target.files?.[0];
-		event.target.value = "";
-		if (!file) return;
+	// const _handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+	// 	const file = event.target.files?.[0];
+	// 	event.target.value = "";
+	// 	if (!file) return;
 
-		setUploading(true);
-		setUploadError(null);
-		try {
-			await projectFileApi.upload({ projectId, file });
-			await onRefresh();
-			toast.success("文件上传成功");
-		} catch (err) {
-			setUploadError(err instanceof Error ? err.message : "上传文件失败");
-		} finally {
-			setUploading(false);
-		}
-	};
+	// 	setUploading(true);
+	// 	setUploadError(null);
+	// 	try {
+	// 		await projectFileApi.upload({ projectId, file });
+	// 		await onRefresh();
+	// 		toast.success("文件上传成功");
+	// 	} catch (err) {
+	// 		setUploadError(err instanceof Error ? err.message : "上传文件失败");
+	// 	} finally {
+	// 		setUploading(false);
+	// 	}
+	// };
 
 	const handleDownload = async (file: ProjectFileNode) => {
 		try {
