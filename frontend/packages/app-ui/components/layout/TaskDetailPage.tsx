@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProjectTask } from "@leros/store";
+import type { ProjectArtifact, ProjectTask } from "@leros/store";
 import { formatTokenCount, projectFileApi, useChatStore, useLayoutStore } from "@leros/store";
 import { taskApi } from "@leros/store/api/taskApi";
 import { cn } from "@leros/ui/lib/utils";
