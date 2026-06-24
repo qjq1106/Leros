@@ -666,10 +666,14 @@ function ProjectTaskList({
 			<div className={cn(compact ? SIDEBAR_COMPACT_LIST_CLASS : "space-y-3")}>
 				{tasks.map((task) => {
 					const cardClassName = cn(
-						"group flex w-full items-start border border-[var(--leros-control-border)] bg-[var(--leros-surface)] shadow-sm",
+						"group relative w-full border border-[var(--leros-control-border)] bg-[var(--leros-surface)] shadow-sm",
 						onOpen &&
 							"cursor-pointer transition-colors hover:border-[var(--leros-primary-soft)] hover:bg-[var(--leros-primary-softer)]/35",
-						compact ? "gap-3 rounded-lg px-3.5 py-3" : "gap-3.5 rounded-lg px-4 py-3.5",
+						"rounded-lg",
+					);
+					const contentClassName = cn(
+						"flex w-full min-w-0 items-start text-left",
+						compact ? "gap-3 px-3.5 py-3" : "gap-3.5 px-4 py-3.5",
 					);
 					const content = (
 						<>
@@ -695,7 +699,7 @@ function ProjectTaskList({
 							<button
 								key={task.id}
 								type="button"
-								className={cardClassName}
+								className={cn(cardClassName, contentClassName)}
 								onClick={() => onOpen?.(task)}
 								disabled={!onOpen}
 								title={onOpen ? "打开任务会话" : undefined}
@@ -709,7 +713,7 @@ function ProjectTaskList({
 						<div key={task.id} className={cardClassName}>
 							<button
 								type="button"
-								className="flex min-w-0 flex-1 items-start gap-3.5 text-left"
+								className={cn(contentClassName, "pr-11")}
 								onClick={() => onOpen?.(task)}
 								disabled={!onOpen}
 								title={onOpen ? "打开任务会话" : undefined}
@@ -719,7 +723,7 @@ function ProjectTaskList({
 							{!compact && (
 								<button
 									type="button"
-									className="mt-0.5 shrink-0 rounded p-0.5 text-[var(--leros-text-muted)] opacity-0 transition-opacity hover:bg-[var(--leros-danger-softer)] hover:text-[var(--leros-danger)] group-hover:opacity-100"
+									className="pointer-events-none absolute right-4 top-4 rounded p-0.5 text-[var(--leros-text-muted)] opacity-0 transition-opacity hover:bg-[var(--leros-danger-softer)] hover:text-[var(--leros-danger)] group-hover:pointer-events-auto group-hover:opacity-100"
 									onClick={(event) => {
 										event.stopPropagation();
 										onDelete(task);
