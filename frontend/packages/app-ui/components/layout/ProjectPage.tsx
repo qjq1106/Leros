@@ -27,7 +27,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { toast } from "sonner";
 import { MessageTimeline } from "../chat/MessageTimeline";
 import { MarkdownRenderer } from "../common/MarkdownRenderer";
 import { ChatInput } from "../input/ChatInput";
@@ -743,7 +742,6 @@ function ProjectTaskList({
 function ProjectFiles({
 	projectId,
 	files,
-	onRefresh,
 }: {
 	projectId: string;
 	files: ProjectFileNode[];
@@ -753,8 +751,8 @@ function ProjectFiles({
 	const [previewState, setPreviewState] = useState<FilePreviewState>({
 		status: "idle",
 	});
-	const [uploading, setUploading] = useState(false);
-	const [uploadError, setUploadError] = useState<string | null>(null);
+	const [uploading] = useState(false);
+	const [uploadError] = useState<string | null>(null);
 	const [searchKeyword, setSearchKeyword] = useState("");
 	const [fileSourceFilter, setFileSourceFilter] = useState<"all" | FileSource>("all");
 	const [drawerWidth, setDrawerWidth] = useState(FILE_PREVIEW_DRAWER_DEFAULT_WIDTH);
