@@ -13,7 +13,6 @@ import {
 	FolderOpen,
 	ListTodo,
 	Paperclip,
-	Plus,
 	Search,
 	SendHorizonal,
 	Sparkles,
@@ -24,7 +23,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { toast } from "sonner";
 import { useAuth } from "../auth";
 import { PROJECT_ATTACHMENT_ACCEPT } from "../input/ChatInput";
-import { StructuredComposer } from "../input/StructuredComposer";
+import { ComposerActionBar } from "../input/ComposerActionBar";
+import { StructuredComposer, type StructuredComposerHandle } from "../input/StructuredComposer";
 import type { AppNavigation } from "./LeftRail";
 
 export function WorkbenchPanel({ navigation }: { navigation?: AppNavigation }) {
@@ -42,6 +42,7 @@ export function WorkbenchPanel({ navigation }: { navigation?: AppNavigation }) {
 		useChatStore((s) => s);
 	const { isAuthenticated, openAuthDialog, requireAuth } = useAuth();
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const composerRef = useRef<StructuredComposerHandle | null>(null);
 	const attachmentsRef = useRef<Attachment[]>([]);
 	const [input, setInput] = useState("");
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -65,7 +66,7 @@ export function WorkbenchPanel({ navigation }: { navigation?: AppNavigation }) {
 
 	const cloneAttachmentsForOptimisticMessage = (items: Attachment[]) =>
 		items.map((attachment) => {
-			// 中文注释：工作台清空输入区时会释放原 blob 预览，这里为任务页首屏回显复制一份独立预览地址。
+			// 中文注释：工作台清空输入区前，先为图片附件复制一份独立预览地址，避免跳页后首屏丢图。
 			if (attachment.type === "image" && attachment.file) {
 				return {
 					...attachment,
@@ -93,7 +94,7 @@ export function WorkbenchPanel({ navigation }: { navigation?: AppNavigation }) {
 		const data = await sendWorkbenchMessage(content, activeWorkbenchProjectId, attachments);
 		if (data?.session_id) {
 			const optimisticAttachments = cloneAttachmentsForOptimisticMessage(attachments);
-			// 中文注释：工作台跳转任务页前，先把附件一起写入 optimistic 消息，避免首屏只显示文本。
+			// 中文注释：工作台跳转详情页前，先把附件写进 optimistic 消息，避免首屏只剩文本。
 			await startSessionResponseStream(data.session_id, content, optimisticAttachments);
 		}
 		if (navigation && data?.project_id && data?.task_id && data?.session_id) {
@@ -116,7 +117,7 @@ export function WorkbenchPanel({ navigation }: { navigation?: AppNavigation }) {
 	};
 
 	const uploadWorkbenchAttachment = useCallback(async (file: File) => {
-		// 无项目时先走通用上传，后续随 NewMessage 自动关联到新建项目。
+		// 中文注释：未选项目时先走通用上传，后续再随 NewMessage 关联到新建任务上下文。
 		const response = await projectFileApi.uploadLoose({
 			file,
 			purpose: "attachment",
@@ -313,7 +314,7 @@ export function WorkbenchPanel({ navigation }: { navigation?: AppNavigation }) {
 							</p>
 						</div>
 
-						{/* Enhanced Command Input Card — 边框/阴影/内边距与 ChatInput project 变体对齐 */}
+						{/* Enhanced Command Input Card: 边框、阴影、内边距与 ChatInput project 变体对齐 */}
 						<div className="relative flex flex-col rounded-2xl bg-white px-4 py-2 shadow-sm ring-1 ring-slate-200/70 transition-all focus-within:shadow-[0_0_24px_rgba(15,23,42,0.12)] focus-within:ring-slate-200/70">
 							<input
 								ref={fileInputRef}
@@ -355,6 +356,7 @@ export function WorkbenchPanel({ navigation }: { navigation?: AppNavigation }) {
 							)}
 							<div className="min-w-0">
 								<StructuredComposer
+									ref={composerRef}
 									value={input}
 									onChange={setInput}
 									onSubmit={() => {
@@ -369,20 +371,18 @@ export function WorkbenchPanel({ navigation }: { navigation?: AppNavigation }) {
 							</div>
 							<div className="flex items-center justify-between border-t border-[var(--leros-chat-ai-border)] pt-3">
 								<div className="flex items-center gap-3">
-									<button
-										type="button"
-										onClick={() => {
+									<ComposerActionBar
+										inputValue={input}
+										composerRef={composerRef}
+										onUpload={() => fileInputRef.current?.click()}
+										onBeforeAction={() => {
 											if (!isAuthenticated) {
 												openAuthDialog("login");
-												return;
+												return false;
 											}
-											fileInputRef.current?.click();
+											return true;
 										}}
-										className="rounded-full p-1.5 text-[var(--leros-text-muted)] transition-colors hover:bg-[var(--leros-chat-control-bg)]"
-										aria-label="添加附件"
-									>
-										<Plus className="size-5" />
-									</button>
+									/>
 									<Popover open={projectMenuOpen} onOpenChange={handleProjectMenuOpenChange}>
 										<PopoverTrigger
 											type="button"
@@ -545,7 +545,7 @@ export function WorkbenchPanel({ navigation }: { navigation?: AppNavigation }) {
 										size="icon"
 										onClick={handleSend}
 										disabled={isGenerating || !input.trim()}
-										// 中文注释：与项目任务 ChatInput 发送按钮保持一致，使用黑色主色而非品牌紫
+										// 中文注释：工作台发送按钮与项目/任务页保持同一视觉规格。
 										className="size-9 min-w-0 rounded-xl bg-black !text-white shadow-sm hover:bg-blue-700 disabled:bg-[#f3f3f4] disabled:!text-slate-400"
 									>
 										<SendHorizonal

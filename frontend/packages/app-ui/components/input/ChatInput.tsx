@@ -11,7 +11,6 @@ import {
 	AtSign,
 	ChevronDown,
 	CircleStop,
-	ImageIcon,
 	LoaderCircle,
 	Paperclip,
 	SendHorizonal,
@@ -25,6 +24,7 @@ import {
 	getProjectChatLayoutClasses,
 	type ProjectChatLayoutMode,
 } from "../layout/project-chat-layout";
+import { ComposerActionBar } from "./ComposerActionBar";
 import { StructuredComposer, type StructuredComposerHandle } from "./StructuredComposer";
 
 // 只放开当前已有稳定预览能力的文档类型，避免上传后落到不可预览的兜底体验。
@@ -62,7 +62,7 @@ export function ChatInput({
 	} = useChatStore((s) => s);
 	const { activeProjectId, currentView } = useLayoutStore((s) => s);
 
-	const composerRef = useRef<StructuredComposerHandle>(null);
+	const composerRef = useRef<StructuredComposerHandle | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [showModelDropdown, setShowModelDropdown] = useState(false);
 
@@ -203,25 +203,22 @@ export function ChatInput({
 						)}
 					>
 						<div className="flex items-center gap-1">
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								className="text-slate-400 hover:text-slate-600"
-								onClick={() => fileInputRef.current?.click()}
-							>
-								<Paperclip className="size-4" />
-							</Button>
 							{isProjectVariant ? (
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									className="text-slate-500 hover:text-slate-700"
-									onClick={() => fileInputRef.current?.click()}
-								>
-									<ImageIcon className="size-4" />
-								</Button>
+								<ComposerActionBar
+									inputValue={inputText}
+									composerRef={composerRef}
+									onUpload={() => fileInputRef.current?.click()}
+								/>
 							) : (
 								<>
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										className="text-slate-400 hover:text-slate-600"
+										onClick={() => fileInputRef.current?.click()}
+									>
+										<Paperclip className="size-4" />
+									</Button>
 									<Button
 										variant="ghost"
 										size="icon-sm"
